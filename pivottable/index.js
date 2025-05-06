@@ -23,37 +23,51 @@ function weightedAverage ([val, coef]) {
   });
 }
 
-const aggregators = {
-  'Weighted Average': weightedAverage
-};
+// Traduction du nom des opérations mathématiques en français
+$.extend(
+  $.pivotUtilities.aggregators,
+  $.pivotUtilities.locales.fr.aggregators,
+  { 'Moyenne pondérée': weightedAverage }
+);
 
+// Traduction du nom des types de visualisation en français
+$.extend(
+  $.pivotUtilities.renderers,
+  $.pivotUtilities.locales.fr.renderers
+);
+
+// Rendu allégé de la pivot table sans les autres possibilités de visualisation + traduction de Moyenne pondérée
 grist.onRecords(async rec => {
-  const { rows, cols, vals, aggregatorName, rendererName } = await grist.getOption('settings') ?? {};
-  let initialRender = true;
+  let { rows, cols, vals, aggregatorName, rendererName } =
+    await grist.getOption('settings') ?? {};
+
+  // Si l'ancien label était en anglais, on le mappe en FR
+  const mapEnToFr = { 'Weighted Average': 'Moyenne pondérée' };
+  if (aggregatorName in mapEnToFr) {
+    aggregatorName = mapEnToFr[aggregatorName];
+  }
+
+  let first = true;
   $('#table').pivotUI(
     rec,
     {
       rows,
       cols,
       vals,
-      onRefresh: function (config) {
-        if (initialRender) {
-          initialRender = false;
-          return;
-        }
-        const { rows, cols, vals, aggregatorName, rendererName } = config;
-        grist.setOption('settings', { rows, cols, vals, aggregatorName, rendererName });
+      onRefresh(config) {
+        if (first) { first = false; return; }
+        grist.setOption('settings', {
+          rows:   config.rows,
+          cols:   config.cols,
+          vals:   config.vals,
+          aggregatorName: config.aggregatorName,
+          rendererName:   config.rendererName,
+        });
       },
       aggregatorName,
       rendererName,
-      aggregators: $.extend($.pivotUtilities.aggregators, aggregators),
-      renderers: $.extend(
-        $.pivotUtilities.renderers,
-        $.pivotUtilities.plotly_renderers,
-        $.pivotUtilities.d3_renderers,
-        $.pivotUtilities.export_renderers
-      )
     },
-    true
+    false,  // overwrite = false
+    'fr'    // locale française
   );
 });
