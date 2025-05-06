@@ -31,10 +31,8 @@ $.extend(
 );
 
 // Traduction du nom des types de visualisation en français
-$.extend(
-  $.pivotUtilities.renderers,
-  $.pivotUtilities.locales.fr.renderers
-);
+$.extend($.pivotUtilities.locales.fr.renderers,
+         $.pivotUtilities.export_renderers);
 
 // Rendu allégé de la pivot table sans les autres possibilités de visualisation + traduction de Moyenne pondérée
 grist.onRecords(async rec => {
