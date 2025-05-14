@@ -7,20 +7,28 @@ grist.ready({
   requiredAccess: 'read table'
 });
 
-let currentViewMode = 'pivot'; 
-let lastPivotData = null;      
-let currentPivotConfig = {};  
+let currentViewMode = 'pivot'; // Mode d'affichage actuel : 'pivot' (normal) ou 'fullscreen' (plein écran)
+let lastPivotData = null;  // Stocke les données brutes du tableau reçues de Grist
+let currentPivotConfig = {};  // Configuration du tableau (rows, cols, vals, aggregatorName, rendererName)
+let pivotTableInitialized = false; // suit l'état d'initialisation du widget 
 
-// Import of DynamiwView.JS 
+// Fonction pour mettre à jour le tableau même lorsqu'il est en plein écran
 function updateFullscreenTable() {
   const $pivotTableInUI = $('#table').find('table.pvtTable'); 
   const $fullscreenContainer = $('#fullscreen-table-container');
   $fullscreenContainer.empty(); 
+  
   if ($pivotTableInUI.length) {
     const $clonedTable = $pivotTableInUI.clone(true, true);
     $fullscreenContainer.append($clonedTable);
   } else {
-    $fullscreenContainer.html('<p style="text-align:center; padding-top:50px; font-style:italic;">Aucun tableau à afficher en plein écran.</p>');
+    // Si nous sommes en mode plein écran mais que la table n'est pas encore prête,
+    // afficher un message de chargement au lieu d'un message d'erreur
+    if (currentViewMode === 'fullscreen' && !pivotTableInitialized) {
+      $fullscreenContainer.html('<p style="text-align:center; padding-top:50px;">Chargement du tableau en cours...</p>');
+    } else {
+      $fullscreenContainer.html('<p style="text-align:center; padding-top:50px; font-style:italic;">Aucun tableau à afficher en plein écran.</p>');
+    }
   }
 }
 
@@ -71,6 +79,23 @@ $.extend(
 $.extend($.pivotUtilities.locales.fr.renderers,
          $.pivotUtilities.export_renderers);
 
+// Fonction qui attend que le tableau croisé dynamique soit complètement chargé, et applique le mode plein écran si nécessaire
+function checkPivotTableAndApplyFullscreen() {
+  const $pivotTable = $('#table').find('table.pvtTable');
+  
+  if ($pivotTable.length > 0) {
+    // Le tableau est prêt, mettons à jour le mode plein écran si nécessaire
+    if (currentViewMode === 'fullscreen') {
+      updateFullscreenTable();
+    }
+    pivotTableInitialized = true;
+    return true;
+  }
+  
+  // Si le tableau n'est pas encore prêt, attendre un peu et réessayer 
+  return false;
+}
+
 // Rendu allégé de la pivot table sans les autres possibilités de visualisation + traduction de Moyenne pondérée
 grist.onRecords(async rec => {
   lastPivotData = rec;  // Sauvegarde globale des données reçues
@@ -82,7 +107,7 @@ grist.onRecords(async rec => {
   // Stockage centralisé de la config pour facilité de mise à jour
   currentPivotConfig = { rows, cols, vals, aggregatorName, rendererName };
 
-  // Si l'ancien label était en anglais, on le mappe en français
+  // l'ancien label était en anglais, on le mappe en français
   const mapEnToFr = { 'Weighted Average': 'Moyenne pondérée' };
   if (aggregatorName in mapEnToFr) {
     aggregatorName = mapEnToFr[aggregatorName];
