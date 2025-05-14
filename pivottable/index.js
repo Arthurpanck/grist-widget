@@ -161,7 +161,19 @@ grist.onRecords(async rec => {
   } catch (e) {
     console.error("Error loading viewMode from Grist options:", e);
   }
-  applyViewMode(); 
+  applyViewMode();
+
+  // Vérifier périodiquement si le tableau est chargé pour le mode plein écran
+  if (currentViewMode === 'fullscreen') {
+    const checkInterval = setInterval(() => {
+      if (checkPivotTableAndApplyFullscreen()) {
+        clearInterval(checkInterval);
+      }
+    }, 200);
+    
+    // Arrêter de vérifier après 5 secondes dans tous les cas
+    setTimeout(() => clearInterval(checkInterval), 5000);
+  }
 });
 $(document).ready(function() {
   // Gestionnaire pour le sélecteur de vue original
