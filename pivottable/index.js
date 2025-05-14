@@ -99,6 +99,7 @@ function checkPivotTableAndApplyFullscreen() {
 // Rendu allégé de la pivot table sans les autres possibilités de visualisation + traduction de Moyenne pondérée
 grist.onRecords(async rec => {
   lastPivotData = rec;  // Sauvegarde globale des données reçues
+  pivotTableInitialized = false; // Réinitialiser l'état d'initialisation
 
   // Récupération des options de configuration précédemment sauvegardées
   let settings = await grist.getOption('settings') ?? {};
