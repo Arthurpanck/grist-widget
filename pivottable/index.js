@@ -354,37 +354,59 @@ $.extend($.pivotUtilities.locales.fr.renderers,
 
 // Rendu allégé de la pivot table sans les autres possibilités de visualisation + traduction de Moyenne pondérée
 grist.onRecords(async rec => {
-  let { rows, cols, vals, aggregatorName, rendererName } =
-    await grist.getOption('settings') ?? {};
+  lastPivotData = rec;  // Sauvegarde globale des données reçues
 
-  // Si l'ancien label était en anglais, on le mappe en FR
+  // Récupération des options de configuration précédemment sauvegardées
+  let settings = await grist.getOption('settings') ?? {};
+  let { rows, cols, vals, aggregatorName, rendererName } = settings;
+
+  // Stockage centralisé de la config pour facilité de mise à jour
+  currentPivotConfig = { rows, cols, vals, aggregatorName, rendererName };
+
+  // Si l'ancien label était en anglais, on le mappe en français
   const mapEnToFr = { 'Weighted Average': 'Moyenne pondérée' };
   if (aggregatorName in mapEnToFr) {
     aggregatorName = mapEnToFr[aggregatorName];
+    currentPivotConfig.aggregatorName = aggregatorName;  // Mise à jour dans config centrale
   }
 
-  let first = true;
+  let firstRefresh = true; // Pour éviter d’écrire dans grist à la première initialisation
+
   $('#table').pivotUI(
     rec,
     {
-      rows,
-      cols,
-      vals,
+      rows: currentPivotConfig.rows,
+      cols: currentPivotConfig.cols,
+      vals: currentPivotConfig.vals,
+
+      // Lors d’une modification par l’utilisateur
       onRefresh(config) {
-        if (first) { first = false; return; }
-        grist.setOption('settings', {
-          rows:   config.rows,
-          cols:   config.cols,
-          vals:   config.vals,
+        if (firstRefresh) { 
+          firstRefresh = false; 
+          return; 
+        }
+        currentPivotConfig = {
+          rows: config.rows,
+          cols: config.cols,
+          vals: config.vals,
           aggregatorName: config.aggregatorName,
-          rendererName:   config.rendererName,
-        });
+          rendererName: config.rendererName,
+        };
+
+        // Sauvegarde des options modifiées dans Grist
+        grist.setOption('settings', currentPivotConfig);
+
+        // Si on est en mode fullscreen, mettre à jour le tableau cloné
+        if (currentViewMode === 'fullscreen') {
+          updateFullscreenTable();
+        }
       },
-      aggregatorName,
-      rendererName,
+
+      aggregatorName: currentPivotConfig.aggregatorName,
+      rendererName: currentPivotConfig.rendererName,
     },
-    false,  // overwrite = false
-    'fr'    // locale française
+    false,  // overwrite = false, on ne remplace pas tout, on conserve ce qui existe
+    'fr'    // locale française pour les labels par défaut
   );
   try {
     const savedViewMode = await grist.getOption('viewMode');
