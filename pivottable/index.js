@@ -386,4 +386,34 @@ grist.onRecords(async rec => {
     false,  // overwrite = false
     'fr'    // locale française
   );
+  try {
+    const savedViewMode = await grist.getOption('viewMode');
+    if (savedViewMode && (savedViewMode === 'pivot' || savedViewMode === 'fullscreen')) {
+      currentViewMode = savedViewMode;
+      $('#view-mode-select').val(currentViewMode);
+    }
+  } catch (e) {
+    console.error("Error loading viewMode from Grist options:", e);
+  }
+  applyViewMode(); 
+});
+$(document).ready(function() {
+  // Gestionnaire pour le sélecteur de vue original
+  $('#view-mode-select').on('change', function() {
+    currentViewMode = $(this).val();
+    grist.setOption('viewMode', currentViewMode).catch(err => {
+        console.error("Failed to save viewMode:", err);
+    });
+    applyViewMode();
+  });
+
+  // Gestionnaire pour le bouton "Quitter plein écran"
+  $('#fullscreen-exit-button').on('click', function() {
+    currentViewMode = 'pivot';
+    $('#view-mode-select').val('pivot'); // Synchroniser le dropdown original
+    grist.setOption('viewMode', currentViewMode).catch(err => {
+        console.error("Failed to save viewMode:", err);
+    });
+    applyViewMode();
+  });
 });
