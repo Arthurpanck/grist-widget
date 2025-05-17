@@ -153,6 +153,10 @@ grist.onRecords(async rec => {
     false,  // overwrite = false, on ne remplace pas tout, on conserve ce qui existe
     'fr'    // locale française pour les labels par défaut
   );
+
+  // Créer de manière dynamique les Labels "colonnes" "lignes" "Valeurs"
+  PivotLabels.init(); 
+  
   try {
     const savedViewMode = await grist.getOption('viewMode');
     if (savedViewMode && (savedViewMode === 'pivot' || savedViewMode === 'fullscreen')) {
