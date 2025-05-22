@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Widget Extraction DOCX Automatique</title>
+  <style>
+    :root {
+      --primary-color: #4a6fa5;
+      --secondary-color: #6c757d;
+      --success-color: #28a745;
+      --danger-color: #dc3545;
+      --light-color: #f8f9fa;
+      --dark-color: #343a40;
+      --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      --border-radius: 8px;
+      --transition: all 0.3s ease;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background-color: #f5f7fa;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 30px;
+      background-color: white;
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow);
+    }
+    
+    header {
+      margin-bottom: 30px;
+      border-bottom: 2px solid var(--light-color);
+      padding-bottom: 15px;
+    }
+    
+    h2 {
+      color: var(--primary-color);
+      margin-top: 0;
+      font-weight: 600;
+    }
+    
+    .form-group {
+      margin-bottom: 25px;
+      padding: 20px;
+      background-color: var(--light-color);
+      border-radius: var(--border-radius);
+      transition: var(--transition);
+    }
+    
+    .form-group:hover {
+      box-shadow: var(--shadow);
+    }
+    
+    .form-group h3 {
+      margin-top: 0;
+      color: var(--primary-color);
+      font-size: 18px;
+      margin-bottom: 15px;
+    }
+    
+    .input-row {
+      display: flex;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+      gap: 15px;
+    }
+    
+    .input-group {
+      flex: 1;
+      min-width: 200px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: var(--dark-color);
+    }
+    
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+      transition: var(--transition);
+    }
+    
+    input[type="text"]:focus {
+      border-color: var(--primary-color);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2);
+    }
+    
+    .info-card {
+      background-color: #e8f4fd;
+      border-left: 4px solid var(--primary-color);
+      padding: 15px;
+      margin-top: 25px;
+      border-radius: 4px;
+    }
+    
+    .info-icon {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      background-color: var(--primary-color);
+      color: white;
+      text-align: center;
+      line-height: 20px;
+      border-radius: 50%;
+      margin-right: 8px;
+      font-weight: bold;
+    }
+    
+    .info-text {
+      color: #555;
+      font-style: italic;
+      display: inline-block;
+    }
+    
+    .message {
+      padding: 15px;
+      margin-top: 20px;
+      border-radius: var(--border-radius);
+      display: none;
+    }
+    
+    #successMessage {
+      background-color: #d4edda;
+      border-left: 4px solid var(--success-color);
+      color: #155724;
+    }
+    
+    #errorMessage {
+      background-color: #f8d7da;
+      border-left: 4px solid var(--danger-color);
+      color: #721c24;
+    }
+
+    footer {
+      margin-top: 30px;
+      text-align: center;
+      color: var(--secondary-color);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h2>Widget Extraction DOCX Automatique</h2>
+    </header>
+    
+    <div class="form-group">
+      <h3>Définir les bornes d'extraction</h3>
+      
+      <div class="input-row">
+        <div class="input-group">
+          <label for="start1">Début #1</label>
+          <input type="text" id="start1" placeholder="Ex : appelle" />
+        </div>
+        <div class="input-group">
+          <label for="end1">Fin #1</label>
+          <input type="text" id="end1" placeholder="Ex : et" />
+        </div>
+      </div>
+      
+      <div class="input-row">
+        <div class="input-group">
+          <label for="start2">Début #2</label>
+          <input type="text" id="start2" placeholder="Ex : début2" />
+        </div>
+        <div class="input-group">
+          <label for="end2">Fin #2</label>
+          <input type="text" id="end2" placeholder="Ex : fin2" />
+        </div>
+      </div>
+      
+      <div class="input-row">
+        <div class="input-group">
+          <label for="start3">Début #3</label>
+          <input type="text" id="start3" placeholder="Ex : début3" />
+        </div>
+        <div class="input-group">
+          <label for="end3">Fin #3</label>
+          <input type="text" id="end3" placeholder="Ex : fin3" />
+        </div>
+      </div>
+    </div>
+    
+    <div class="info-card">
+      <span class="info-icon">i</span>
+      <span class="info-text">
+        L'analyse se déclenche automatiquement dès qu'un nouveau fichier DOCX est uploadé dans l'enregistrement.
+      </span>
+    </div>
+    
+    <div id="successMessage" class="message"></div>
+    <div id="errorMessage" class="message"></div>
+    
+    <footer>
+      <p>© 2025 - Widget Extraction DOCX Automatique</p>
+    </footer>
+  </div>
+
+  <!-- Chargement du script principal -->
+  <script src="app.js"></script>
+</body>
+</html>
