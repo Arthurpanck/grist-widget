@@ -109,7 +109,10 @@ function cancel() {
 }
 
 function downloadPDF() {
-  if (!txt) { return; }
+  if (!txt) { 
+    showError("Editor not ready");
+    return; 
+  }
   
   try {
     // Ensure we're in preview mode to get the rendered HTML
@@ -118,81 +121,77 @@ function downloadPDF() {
       txt.togglePreview();
     }
     
-    // Get the rendered HTML content from the preview
-    const previewElement = txt.element.querySelector('.editor-preview-active') || 
-                          txt.element.querySelector('.editor-preview');
-    
-    if (!previewElement) {
-      showError("Unable to generate PDF: No preview content found");
-      return;
-    }
-    
-    // Create a temporary container with the content
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = previewElement.innerHTML;
-    
-    // Add some basic styling for PDF
-    tempDiv.style.padding = '20px';
-    tempDiv.style.fontFamily = 'Arial, sans-serif';
-    tempDiv.style.lineHeight = '1.6';
-    tempDiv.style.color = '#333';
-    tempDiv.style.backgroundColor = '#fff';
-    
-    // Generate filename based on first line of content or use default
-    const firstLine = txt.value().split('\n')[0].replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-    const filename = firstLine || 'grist_content';
-    
-    // Configure PDF options
-    const opt = {
-      margin: 1,
-      filename: `${filename}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-    };
-    
-    // Generate and download PDF
-    if (typeof html2pdf !== 'undefined') {
-      html2pdf().set(opt).from(tempDiv).save().then(() => {
-        console.log('PDF downloaded successfully');
-        // Restore edit mode if we were in it
+    // Wait a bit for the preview to render
+    setTimeout(() => {
+      // Get the rendered HTML content from the preview
+      const previewElement = txt.element.querySelector('.editor-preview-active') || 
+                            txt.element.querySelector('.editor-preview');
+      
+      if (!previewElement) {
+        showError("Unable to generate PDF: No preview content found");
         if (wasInEditMode) {
           txt.togglePreview();
         }
-      }).catch((error) => {
-        showError(`PDF generation failed: ${error.message}`);
-        console.error('PDF generation error:', error);
-        // Restore edit mode if we were in it
-        if (wasInEditMode) {
-          txt.togglePreview();
-        }
-      });
-    } else {
-      // Fallback: Try to load html2pdf dynamically
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-      script.onload = () => {
+        return;
+      }
+      
+      // Create a temporary container with the content
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = previewElement.innerHTML;
+      
+      // Add some basic styling for PDF
+      tempDiv.style.cssText = `
+        padding: 20px;
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background-color: #fff;
+        max-width: none;
+      `;
+      
+      // Generate filename based on first line of content or use default
+      const content = txt.value() || '';
+      const firstLine = content.split('\n')[0].replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      const filename = firstLine || 'grist_content';
+      
+      // Configure PDF options
+      const opt = {
+        margin: 1,
+        filename: `${filename}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2,
+          useCORS: true,
+          allowTaint: true
+        },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+      };
+      
+      // Generate and download PDF
+      if (typeof html2pdf !== 'undefined') {
+        console.log("Generating PDF...");
         html2pdf().set(opt).from(tempDiv).save().then(() => {
           console.log('PDF downloaded successfully');
+          showError(null);
+          // Restore edit mode if we were in it
           if (wasInEditMode) {
             txt.togglePreview();
           }
         }).catch((error) => {
           showError(`PDF generation failed: ${error.message}`);
           console.error('PDF generation error:', error);
+          // Restore edit mode if we were in it
           if (wasInEditMode) {
             txt.togglePreview();
           }
         });
-      };
-      script.onerror = () => {
-        showError("Failed to load PDF library. Please check your internet connection.");
+      } else {
+        showError("PDF library not loaded. Please refresh the page and try again.");
         if (wasInEditMode) {
           txt.togglePreview();
         }
-      };
-      document.head.appendChild(script);
-    }
+      }
+    }, 200);
     
   } catch (error) {
     showError(`Error generating PDF: ${error.message}`);
@@ -237,7 +236,7 @@ var toolbar = [
     action: function(editor) {
       downloadPDF();
     },
-    className: 'fa fa-download download-action',
+    className: 'fa download-action',
     title: 'Download as PDF'
   },
   {
@@ -266,16 +265,42 @@ ready(() => {
     if (newEditable !== editable) {
       editable = newEditable;
       txt = new EasyMDE({
+        element: document.getElementById('txt'),
         spellChecker: false,
         status: false,
         minHeight: '0px',
         toolbar: editable ? toolbar : false,
       });
+      
       if (editable) {
-        dom.update(document.querySelector(".edit-action"), dom.hide(isEditMode));
-        dom.update(document.querySelector(".save-action"), dom.show(isEditMode));
-        dom.update(document.querySelector(".download-action"), dom.show(true)); // Always show download
-        dom.update(txt.toolbar_div, dom.cls('toolbar-read-mode', use => !use(isEditMode)));
+        // Wait for DOM to be ready
+        setTimeout(() => {
+          const editButton = document.querySelector(".edit-action");
+          const saveButton = document.querySelector(".save-action");
+          const downloadButton = document.querySelector(".download-action");
+          
+          console.log("Buttons found:", {
+            edit: !!editButton,
+            save: !!saveButton,
+            download: !!downloadButton
+          });
+          
+          if (editButton) {
+            dom.update(editButton, dom.hide(isEditMode));
+          }
+          if (saveButton) {
+            dom.update(saveButton, dom.show(isEditMode));
+          }
+          if (downloadButton) {
+            // Download button should always be visible
+            downloadButton.style.display = 'inline-block';
+            console.log("Download button configured and visible");
+          }
+          
+          if (txt.toolbar_div) {
+            dom.update(txt.toolbar_div, dom.cls('toolbar-read-mode', use => !use(isEditMode)));
+          }
+        }, 100);
       }
       toggle(false);
     }
@@ -307,7 +332,7 @@ ready(() => {
       colId = mappings.Content;
     }
     showError(null);
-    data = record[colId] || '';
+    var data = record[colId] || '';
     if (nextRowId !== rowId || cachedData !== data) {
       txt.value("" + data);
       if (data) {
@@ -329,7 +354,7 @@ ready(() => {
     isNewRecord.set(true);
     txt.value('');
     rowId = null;
-    cachedData = data = null;
+    cachedData = null;
     colId = null;
     readMode();
   })
@@ -337,6 +362,10 @@ ready(() => {
 });
 
 function toggle(show) {
-  txt.element.style.visibility = show ? 'visible' : 'hidden';
-  txt.toolbar_div.style.visibility = show ? 'visible' : 'hidden';
+  if (txt && txt.element) {
+    txt.element.style.visibility = show ? 'visible' : 'hidden';
+  }
+  if (txt && txt.toolbar_div) {
+    txt.toolbar_div.style.visibility = show ? 'visible' : 'hidden';
+  }
 }
