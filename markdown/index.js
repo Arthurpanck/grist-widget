@@ -108,6 +108,98 @@ function cancel() {
   txt.value("" + cachedData);
 }
 
+function downloadPDF() {
+  if (!txt) { return; }
+  
+  try {
+    // Ensure we're in preview mode to get the rendered HTML
+    const wasInEditMode = !txt.isPreviewActive();
+    if (wasInEditMode) {
+      txt.togglePreview();
+    }
+    
+    // Get the rendered HTML content from the preview
+    const previewElement = txt.element.querySelector('.editor-preview-active') || 
+                          txt.element.querySelector('.editor-preview');
+    
+    if (!previewElement) {
+      showError("Unable to generate PDF: No preview content found");
+      return;
+    }
+    
+    // Create a temporary container with the content
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = previewElement.innerHTML;
+    
+    // Add some basic styling for PDF
+    tempDiv.style.padding = '20px';
+    tempDiv.style.fontFamily = 'Arial, sans-serif';
+    tempDiv.style.lineHeight = '1.6';
+    tempDiv.style.color = '#333';
+    tempDiv.style.backgroundColor = '#fff';
+    
+    // Generate filename based on first line of content or use default
+    const firstLine = txt.value().split('\n')[0].replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+    const filename = firstLine || 'grist_content';
+    
+    // Configure PDF options
+    const opt = {
+      margin: 1,
+      filename: `${filename}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    
+    // Generate and download PDF
+    if (typeof html2pdf !== 'undefined') {
+      html2pdf().set(opt).from(tempDiv).save().then(() => {
+        console.log('PDF downloaded successfully');
+        // Restore edit mode if we were in it
+        if (wasInEditMode) {
+          txt.togglePreview();
+        }
+      }).catch((error) => {
+        showError(`PDF generation failed: ${error.message}`);
+        console.error('PDF generation error:', error);
+        // Restore edit mode if we were in it
+        if (wasInEditMode) {
+          txt.togglePreview();
+        }
+      });
+    } else {
+      // Fallback: Try to load html2pdf dynamically
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      script.onload = () => {
+        html2pdf().set(opt).from(tempDiv).save().then(() => {
+          console.log('PDF downloaded successfully');
+          if (wasInEditMode) {
+            txt.togglePreview();
+          }
+        }).catch((error) => {
+          showError(`PDF generation failed: ${error.message}`);
+          console.error('PDF generation error:', error);
+          if (wasInEditMode) {
+            txt.togglePreview();
+          }
+        });
+      };
+      script.onerror = () => {
+        showError("Failed to load PDF library. Please check your internet connection.");
+        if (wasInEditMode) {
+          txt.togglePreview();
+        }
+      };
+      document.head.appendChild(script);
+    }
+    
+  } catch (error) {
+    showError(`Error generating PDF: ${error.message}`);
+    console.error('Download PDF error:', error);
+  }
+}
+
 function ready(fn) {
   if (document.readyState !== 'loading'){
     fn();
@@ -140,6 +232,15 @@ var toolbar = [
     title: `Cancel (Escape)`
   },
   {
+    name: 'download',
+    text: 'PDF',
+    action: function(editor) {
+      downloadPDF();
+    },
+    className: 'fa fa-download download-action',
+    title: 'Download as PDF'
+  },
+  {
     name: 'edit',
     text: 'Edit',
     action: function(editor) {
@@ -155,7 +256,6 @@ ready(() => {
     columns: [{ name: "Content", type: 'Text'}],
     requiredAccess: 'full'
   });
-
 
   grist.on('message', (e) => {
     if (e.tableId) { tableId = e.tableId; }
@@ -174,6 +274,7 @@ ready(() => {
       if (editable) {
         dom.update(document.querySelector(".edit-action"), dom.hide(isEditMode));
         dom.update(document.querySelector(".save-action"), dom.show(isEditMode));
+        dom.update(document.querySelector(".download-action"), dom.show(true)); // Always show download
         dom.update(txt.toolbar_div, dom.cls('toolbar-read-mode', use => !use(isEditMode)));
       }
       toggle(false);
