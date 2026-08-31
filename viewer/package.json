@@ -9,6 +9,13 @@
     "widgetId": "@gristlabs/widget-viewer",
     "published": true,
     "accessLevel": "read table",
+    "columns": [
+      {
+        "name": "ImageUrl",
+        "title": "Image URL",
+        "type": "Text"
+      }
+    ],
     "renderAfterReady": true,
     "description": "View images loaded from a URL.",
     "authors": [

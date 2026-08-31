@@ -9,6 +9,18 @@
     "widgetId": "@gristlabs/flashcards",
     "published": true,
     "accessLevel": "read table",
+    "columns": [
+      {
+        "name": "Question",
+        "type": "Text",
+        "title": "Question Column"
+      },
+      {
+        "name": "Answer",
+        "type": "Text",
+        "title": "Answer Column"
+      }
+    ],
     "renderAfterReady": true,
     "description": "Show records as flashcards, with a question on one side and an answer on the other.",
     "authors": [

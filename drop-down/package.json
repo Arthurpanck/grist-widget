@@ -9,6 +9,13 @@
     "widgetId": "@gristlabs/widget-drop-down",
     "published": true,
     "accessLevel": "read table",
+    "columns": [
+      {
+        "name": "OptionsToSelect",
+        "title": "Options to select",
+        "type": "Any"
+      }
+    ],
     "renderAfterReady": true,
     "description": "Display a drop-down menu with options from a column.",
     "authors": [
