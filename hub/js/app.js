@@ -13,7 +13,7 @@ import { createApp, reactive, computed, ref, watch, onMounted, Sortable, registe
 import * as C from './config.js';
 import * as G from './grist.js';
 
-export const APP_VERSION = '3.0.0';
+export const APP_VERSION = '3.1.0';
 console.info(`Hub de navigation ${APP_VERSION}`);
 
 // Icônes Lucide pour tous les <wa-icon> (les icônes internes de Web Awesome restent les siennes).
@@ -132,13 +132,12 @@ const HubView = {
   setup(props) {
     const m = computed(() => {
       const c = props.config;
-      let index = 0, number = 0;
+      let index = 0;
       const sections = c.sections
         .filter(s => s.buttons.length || props.mode === 'edit')
         .map(s => ({
           id: s.id,
           title: s.title,
-          number: s.title ? ++number : 0,
           items: s.buttons.map(b => ({ b, label: labelOf(b), color: C.colorOf(b, index++, c), link: linkOf(c, b) })),
         }));
       const bg = c.background;
@@ -148,7 +147,8 @@ const HubView = {
         sections,
         image,
         onDark: (image && bg.tone === 'dark' && bg.veil >= 0.2) || (bg.type === 'color' && C.isDark(bg.color)),
-        hasHeader: c.header.style !== 'none' && Boolean(c.header.title || c.header.subtitle || c.header.logo),
+        hasHeader: props.mode === 'edit' || (c.header.style !== 'none' && Boolean(c.header.title || c.header.subtitle || c.header.logo)),
+        headerStyle: props.mode === 'edit' && c.header.style === 'none' ? 'sobre' : c.header.style,
       };
     });
 
@@ -203,7 +203,13 @@ const HubView = {
 
     const setTitle = (id, title) => { sectionOf(id).title = title; };
 
-    return { m, rootStyle, tagOf, click, sortable, addSection, removeSection, setTitle, isIconName, store };
+    // Titre et sous-titre de la page, modifiables sur place.
+    function setHeader(field, value) {
+      store.draft.header[field] = value;
+      if (store.draft.header.style === 'none' && value) { store.draft.header.style = 'sobre'; }
+    }
+
+    return { m, rootStyle, tagOf, click, sortable, addSection, removeSection, setTitle, setHeader, isIconName, store };
   },
 };
 
@@ -211,10 +217,11 @@ const HubView = {
 let pickerCount = 0;
 const DestPicker = {
   template: '#tpl-dest',
-  props: { label: String, placeholder: String, autofocus: Boolean },
+  props: { label: String, autofocus: Boolean, initialKind: { type: String, default: 'page' } },
   emits: ['pick', 'cancel', 'leave'],
   setup(props, { emit }) {
     const uid = 'dest' + (++pickerCount);
+    const kind = ref(props.initialKind === 'url' ? 'url' : 'page');
     const query = ref('');
     const active = ref(0);
     const input = ref(null);
@@ -223,10 +230,11 @@ const DestPicker = {
       const text = query.value.trim();
       const q = normalizeText(text);
       const list = [];
-      if (text && looksLikeUrl(text) && C.safeUrl(text)) {
+      if (text && (kind.value === 'url' || looksLikeUrl(text)) && C.safeUrl(text)) {
         const url = C.safeUrl(text);
-        list.push({ key: 'url', kind: 'url', url, icon: 'globe', label: hostOf(url) || url, hint: 'Lien web' });
+        list.push({ key: 'url', kind: 'url', url, icon: 'globe', label: hostOf(url) || url, hint: 'Site web' });
       }
+      if (kind.value === 'url') { return list; }
       const used = store.draft ? new Set(C.allButtons(store.draft).filter(b => b.kind === 'page').map(b => b.page)) : new Set();
       store.pages
         .filter(p => !p.isHub && (!q || normalizeText(p.name).includes(q)))
@@ -238,6 +246,7 @@ const DestPicker = {
     });
 
     const emptyText = computed(() => {
+      if (kind.value === 'url') { return 'Saisissez ou collez l\'adresse du site, par exemple www.grandlyon.com.'; }
       if (!store.pages.length) { return 'Collez une adresse web (https://…). Pour choisir une page, accordez l\'accès complet au widget.'; }
       return query.value.trim() ? 'Aucune page ne correspond. Collez une adresse web pour créer un lien.' : 'Collez une adresse web (https://…).';
     });
@@ -258,13 +267,18 @@ const DestPicker = {
       else if (e.key === 'Escape') { e.preventDefault(); emit('cancel'); }
     }
 
+    function setKind(value) {
+      kind.value = value;
+      input.value?.focus();
+    }
+
     function onFocusOut(e) {
       if (!e.currentTarget.contains(e.relatedTarget) && !query.value.trim()) { emit('leave'); }
     }
 
     onMounted(() => { if (props.autofocus) { input.value?.focus(); } });
 
-    return { uid, query, active, input, options, emptyText, pick, onKey, onFocusOut };
+    return { uid, kind, query, active, input, options, emptyText, pick, onKey, onFocusOut, setKind };
   },
 };
 
@@ -395,26 +409,14 @@ const SettingsPanel = {
     }
 
     const choices = computed(() => ({
-      shape: [['tuile', 'Tuiles'], ['aplat', 'Aplats'], ['liste', 'Liste'], ['pastille', 'Pastilles']]
-        .map(([value, label]) => ({ value, label, preview: preview({ look: { shape: value }, background: { type: 'default' } }) })),
-      charte: Object.entries(C.CHARTES)
-        .map(([value, ch]) => ({ value, label: ch.label, hint: ch.hint, preview: preview({ charte: value, look: { palette: ch.palette }, header: { style: 'sobre', title: 'Accueil' }, background: { type: 'default' }, buttons: 2 }) })),
+      shape: [['tuile', 'Classique'], ['douce', 'Douce'], ['aplat', 'Aplat'], ['bloc', 'Bloc icône']]
+        .map(([value, label]) => ({ value, label, preview: preview({ look: { shape: value, align: 'left' }, background: { type: 'default' }, buttons: 2 }) })),
       palette: Object.entries(C.charteOf(store.draft).palettes)
         .map(([value, p]) => ({ value, label: p.label, hint: p.hint, swatches: p.cycle.map(id => C.charteOf(store.draft).colors[id].bg) })),
-      header: [['none', 'Aucun'], ['sobre', 'Sobre'], ['encadre', 'Encadré'], ['bandeau', 'Bandeau']]
-        .map(([value, label]) => ({ value, label, preview: preview({ header: { style: value, title: store.draft.header.title || 'Titre du hub', subtitle: '' }, background: { type: 'default' }, buttons: 2 }) })),
-      background: [['default', 'Par défaut'], ['color', 'Couleur'], ['image', 'Image']]
-        .map(([value, label]) => ({ value, label, preview: preview({ background: { type: value }, buttons: 2 }) })),
     }));
 
-    // Changer de charte conserve l'intention de la palette (unie, alternée, multicolore).
-    function setCharte(charte) {
-      store.draft.charte = charte;
-      store.draft.look.palette = C.paletteFor(charte, store.draft.look.palette);
-      if (!C.CHARTES[charte].backgrounds.includes(store.draft.background.color)) {
-        store.draft.background.color = C.CHARTES[charte].backgrounds[0];
-      }
-    }
+    const hasImage = computed(() => store.draft.background.type === 'image');
+    const setImage = on => { store.draft.background.type = on ? 'image' : 'default'; };
 
     async function importImage(event, apply, logo) {
       const file = event.target.files?.[0];
@@ -427,37 +429,8 @@ const SettingsPanel = {
       }
     }
 
-    const importText = ref('');
-    function importConfig() {
-      try {
-        const parsed = JSON.parse(importText.value);
-        Object.assign(store.draft, C.normalize(parsed.hub || parsed));
-        importText.value = '';
-        notify('Configuration importée.', 'success', 3000);
-      } catch (e) {
-        notify('JSON invalide : ' + e.message, 'danger');
-      }
-    }
-
-    async function reset() {
-      if (await ask({ label: 'Tout effacer ?', text: 'Le hub repartira d\'une page vierge.', ok: 'Tout effacer' })) {
-        const blank = C.defaultConfig();
-        blank.sections.push(C.newSection());
-        store.draft = blank;
-        store.ghost = blank.sections[0].id;
-        store.panel = false;
-      }
-    }
-
-    const exportJson = computed(() => JSON.stringify(C.normalize(store.draft), null, 2));
-    const docBaseHint = computed(() => {
-      const base = C.cleanDocUrl(store.draft.docUrl) || store.docBase;
-      return base ? `Les boutons de page ouvrent ${base}/p/…` : 'Adresse non détectée : collez l\'adresse du document, copiée depuis la barre du navigateur.';
-    });
-
     return {
-      store, d, choices, setCharte, importImage, importText, importConfig, reset, exportJson, docBaseHint,
-      backgroundColors: computed(() => C.charteOf(store.draft).backgrounds),
+      store, d, choices, hasImage, setImage, importImage,
       version: APP_VERSION,
     };
   },

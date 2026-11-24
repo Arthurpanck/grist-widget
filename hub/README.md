@@ -31,11 +31,10 @@ Tout se fait sur la page elle-même, bouton après bouton.
    couleur, description, Supprimer. Chaque modification s'affiche aussitôt.
 3. **Déplacer.** On glisse un bouton pour changer sa place, y compris vers une autre rubrique. Les titres de rubrique
    se modifient sur place ; « Ajouter une rubrique » en crée une nouvelle.
-4. **Afficher.** Le bouton « Affichage » ouvre un panneau à droite, le hub restant visible :
-   - onglet *Apparence* : charte (Métropole de Lyon ou DSFR), forme des boutons (tuiles, aplats, liste, pastilles),
-     couleurs, en-tête (titre, sous-titre, logo), fond (couleur ou image), disposition ;
-   - onglet *Réglages* : pied de page, numérotation des rubriques, adresse du document, modèles prêts à l'emploi,
-     copie de la configuration vers un autre document.
+4. **Titre.** Le titre et le sous-titre de la page se modifient directement en haut du hub.
+5. **Afficher.** Le bouton « Affichage » ouvre un panneau à droite, le hub restant visible :
+   style des tuiles (Classique, Douce, Aplat, Bloc icône), couleurs de la charte, image de fond (adresse ou photo
+   importée, avec un voile réglable) et disposition (taille, alignement, colonnes).
 
 Un hub vide propose « Ajouter le premier bouton », ou de partir d'un modèle. Les lecteurs seuls ne voient jamais
 les outils d'édition ; le hub suit le thème clair ou sombre de Grist et s'adapte au mobile.
