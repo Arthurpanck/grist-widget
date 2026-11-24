@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="fr" class="wa-theme-default wa-palette-default wa-brand-red wa-light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hub de navigation</title>
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+    <!-- Web Awesome : thème, couleurs et utilitaires (sans les « styles natifs », qui restylent tous les <button>). -->
+    <link rel="stylesheet" href="vendor/webawesome/styles/themes/default.css">
+    <link rel="stylesheet" href="vendor/webawesome/styles/color/variants.css">
+    <link rel="stylesheet" href="vendor/webawesome/styles/utilities.css">
+    <link rel="stylesheet" href="hub.css">
+    <!-- Chargeur Web Awesome : charge chaque composant à la demande (librairies dans vendor/, voir tools/vendor.sh). -->
+    <script type="module" src="vendor/webawesome/webawesome.loader.js" data-webawesome="vendor/webawesome"></script>
+    <script type="module" src="js/app.js"></script>
+  </head>
+  <body>
+    <div id="hub-root"></div>
+
+    <!-- ============================================================ -->
+    <!-- Application                                                  -->
+    <!-- ============================================================ -->
+    <template id="tpl-app">
+      <div v-if="!store.loaded" class="loading"><wa-spinner></wa-spinner></div>
+
+      <template-gallery v-else-if="showGallery" :cancellable="store.editing"
+        @choose="chooseTemplate" @blank="startBlank" @cancel="store.gallery = false"></template-gallery>
+
+      <wa-split-panel v-else-if="store.editing && !store.narrow" class="workspace" position-in-pixels="440" primary="end">
+        <div slot="start" class="workspace__preview">
+          <div class="preview-hint"><wa-icon name="mouse-pointer-click"></wa-icon>Aperçu : cliquez sur un bouton pour le modifier</div>
+          <hub-view :config="config" mode="edit" @pick="pickFromPreview"></hub-view>
+        </div>
+        <editor-panel slot="end" @done="finish" @cancel="cancel"></editor-panel>
+      </wa-split-panel>
+
+      <template v-else-if="store.editing">
+        <template v-if="store.mobilePreview">
+          <hub-view :config="config" mode="edit" @pick="pickFromPreview"></hub-view>
+          <wa-button class="floating" variant="brand" pill @click="store.mobilePreview = false">
+            <wa-icon slot="start" name="pencil"></wa-icon>Revenir à l'édition
+          </wa-button>
+        </template>
+        <editor-panel v-else @done="finish" @cancel="cancel"></editor-panel>
+      </template>
+
+      <div v-else-if="!config.sections.some(s => s.buttons.length)" class="empty wa-stack wa-gap-m wa-align-items-center wa-text-center">
+        <wa-icon class="empty__icon" name="layout-template"></wa-icon>
+        <h2 class="wa-heading-l">Page d'accueil en préparation</h2>
+        <p class="wa-color-text-quiet">Ce hub n'a pas encore été configuré par un éditeur du document.</p>
+      </div>
+
+      <hub-view v-else :config="config" mode="view"></hub-view>
+
+      <wa-button v-if="showFab" class="floating floating--top" size="s" appearance="outlined" pill @click="startEditing()">
+        <wa-icon slot="start" name="pencil" label="Modifier le hub"></wa-icon><span class="floating__text">Modifier</span>
+      </wa-button>
+
+      <button-dialog></button-dialog>
+
+      <wa-dialog :open.prop="!!store.confirm" :label="store.confirm ? store.confirm.label : ''"
+        @wa-hide="e => e.target === e.currentTarget && answer(false)">
+        {{ store.confirm && store.confirm.text }}
+        <wa-button slot="footer" appearance="plain" @click="answer(false)">Annuler</wa-button>
+        <wa-button slot="footer" variant="danger" @click="answer(true)">{{ store.confirm && store.confirm.ok }}</wa-button>
+      </wa-dialog>
+
+      <wa-toast placement="bottom-start"></wa-toast>
+    </template>
+
+    <!-- ============================================================ -->
+    <!-- Le hub (lecture, édition, miniatures)                         -->
+    <!-- ============================================================ -->
+    <template id="tpl-hub">
+      <div class="hub" :style="rootStyle" :class="[
+          'hub--' + m.c.look.shape, 'hub--size-' + m.c.look.size, 'hub--align-' + m.c.look.align,
+          { 'hub--on-dark': m.onDark, 'hub--image': m.image, 'hub--columns': m.c.look.columns, 'hub--edit': mode === 'edit' }]">
+        <div v-if="m.hasHeader" class="hub__band" :class="'hub__band--' + m.c.header.style">
+          <header class="hub__head" :class="'hub__head--' + m.c.header.align">
+            <img v-if="m.c.header.logo" class="hub__logo" :src="m.c.header.logo" alt="">
+            <div class="wa-stack wa-gap-2xs">
+              <h1 v-if="m.c.header.title" class="hub__title">{{ m.c.header.title }}</h1>
+              <p v-if="m.c.header.subtitle" class="hub__subtitle">{{ m.c.header.subtitle }}</p>
+            </div>
+          </header>
+        </div>
+
+        <main class="hub__body">
+          <section v-for="s in m.sections" :key="s.id" class="hub__section">
+            <h2 v-if="s.title" class="hub__section-title">{{ m.c.numbering ? s.number + ' - ' : '' }}{{ s.title }}</h2>
+            <div class="hub__grid">
+              <component :is="tagOf(item)" v-for="item in s.items" :key="item.b.id" class="hub-btn"
+                :class="{ 'hub-btn--problem': item.link.problem, 'hub-btn--no-icon': !item.b.icon }"
+                :style="{ '--c': item.color.bg, '--c-on': item.color.fg }"
+                :href="mode === 'view' ? item.link.href : null" :target="mode === 'view' ? item.link.target : null"
+                :rel="item.link.external ? 'noopener noreferrer' : null"
+                :title="item.link.problem ? item.label + ' — ' + item.link.problem : (item.b.description || item.label)"
+                :type="tagOf(item) === 'button' ? 'button' : null"
+                :data-id="item.b.id" @click="click($event, item)">
+                <span v-if="item.b.icon" class="hub-btn__icon">
+                  <wa-icon v-if="isIconName(item.b.icon)" :name="item.b.icon"></wa-icon>
+                  <template v-else>{{ item.b.icon }}</template>
+                </span>
+                <span class="hub-btn__text">
+                  <span class="hub-btn__label">{{ item.label }}</span>
+                  <span v-if="item.b.description" class="hub-btn__desc">{{ item.b.description }}</span>
+                </span>
+                <wa-icon class="hub-btn__go" :name="item.link.external ? 'external-link' : 'arrow-right'"></wa-icon>
+              </component>
+            </div>
+          </section>
+          <footer v-if="m.c.footer" class="hub__footer">{{ m.c.footer }}</footer>
+        </main>
+      </div>
+    </template>
+
+    <!-- ============================================================ -->
+    <!-- Galerie de modèles                                           -->
+    <!-- ============================================================ -->
+    <template id="tpl-gallery">
+      <div class="gallery wa-stack wa-gap-xl">
+        <div class="wa-split wa-align-items-start">
+          <div class="wa-stack wa-gap-2xs">
+            <h1 class="wa-heading-xl">Que doit faire cette page d'accueil&nbsp;?</h1>
+            <p class="wa-color-text-quiet">Choisissez un point de départ, avec les pages de votre document. Tout reste modifiable ensuite.</p>
+          </div>
+          <wa-button v-if="cancellable" appearance="plain" @click="$emit('cancel')">Annuler</wa-button>
+        </div>
+        <div class="gallery__grid">
+          <button v-for="t in templates" :key="t.id" type="button" class="choice choice--large" @click="$emit('choose', t.id)">
+            <span class="choice__preview"><hub-view :config="t.preview" mode="static"></hub-view></span>
+            <span class="choice__text">
+              <span class="choice__label">{{ t.label }}</span>
+              <span class="wa-caption-s wa-color-text-quiet">{{ t.description }}</span>
+            </span>
+          </button>
+        </div>
+        <div class="wa-cluster wa-justify-content-center">
+          <wa-button appearance="plain" @click="$emit('blank')">
+            <wa-icon slot="start" name="file-plus"></wa-icon>Partir d'une page vierge
+          </wa-button>
+        </div>
+      </div>
+    </template>
+
+    <!-- ============================================================ -->
+    <!-- Choix visuel (miniatures)                                    -->
+    <!-- ============================================================ -->
+    <template id="tpl-choices">
+      <div class="wa-stack wa-gap-xs">
+        <span class="field-label">{{ label }}</span>
+        <div class="choices" :class="{ 'choices--small': small }" role="radiogroup" :aria-label="label">
+          <button v-for="o in options" :key="o.value" type="button" class="choice" role="radio"
+            :aria-checked="String(o.value === value)" :title="o.hint || o.label" @click="$emit('change', o.value)">
+            <span v-if="o.swatches" class="choice__swatches"><span v-for="c in o.swatches" :style="{ background: c }"></span></span>
+            <span v-else class="choice__preview"><hub-view :config="o.preview" mode="static"></hub-view></span>
+            <span class="choice__label">{{ o.label }}</span>
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <!-- ============================================================ -->
+    <!-- Panneau d'édition                                            -->
+    <!-- ============================================================ -->
+    <template id="tpl-editor">
+      <div class="editor">
+        <div class="editor__head wa-split">
+          <h2 class="wa-heading-m">Modifier le hub</h2>
+          <div class="wa-cluster wa-gap-2xs">
+            <wa-button v-if="store.narrow" size="s" appearance="outlined" @click="store.mobilePreview = true">
+              <wa-icon slot="start" name="eye"></wa-icon>Aperçu
+            </wa-button>
+            <wa-button size="s" appearance="plain" @click="$emit('cancel')">Annuler</wa-button>
+            <wa-button size="s" variant="brand" @click="$emit('done')">
+              <wa-icon slot="start" name="check"></wa-icon>Terminé
+            </wa-button>
+          </div>
+        </div>
+
+        <wa-tab-group class="editor__tabs" :active="store.tab" @wa-tab-show="store.tab = $event.detail.name">
+          <wa-tab panel="contenu">Contenu</wa-tab>
+          <wa-tab panel="apparence">Apparence</wa-tab>
+          <wa-tab panel="reglages">Réglages</wa-tab>
+
+          <!-- Contenu ------------------------------------------------ -->
+          <wa-tab-panel name="contenu">
+            <div class="wa-stack wa-gap-l">
+              <wa-callout v-if="store.access && store.access !== 'full'" variant="warning" size="s">
+                <wa-icon slot="icon" name="triangle-alert"></wa-icon>
+                Pour choisir les pages dans une liste, accordez l'accès complet au widget
+                (panneau de droite de Grist › Widget › Accès).
+              </wa-callout>
+
+              <section v-for="(s, i) in d.sections" :key="s.id" class="sec wa-stack wa-gap-2xs">
+                <div class="sec__head">
+                  <wa-input size="s" appearance="filled" :value.prop="s.title" placeholder="Rubrique sans titre"
+                    :aria-label="'Titre de la rubrique ' + (i + 1)" @input="s.title = $event.target.value">
+                    <span slot="start" class="sec__num">{{ i + 1 }}</span>
+                  </wa-input>
+                  <wa-dropdown placement="bottom-end" @wa-select="sectionAction($event, i)">
+                    <wa-button slot="trigger" size="s" appearance="plain" aria-label="Actions de la rubrique">
+                      <wa-icon name="ellipsis"></wa-icon>
+                    </wa-button>
+                    <wa-dropdown-item value="up" :disabled.prop="i === 0"><wa-icon slot="icon" name="arrow-up"></wa-icon>Monter</wa-dropdown-item>
+                    <wa-dropdown-item value="down" :disabled.prop="i === d.sections.length - 1"><wa-icon slot="icon" name="arrow-down"></wa-icon>Descendre</wa-dropdown-item>
+                    <wa-divider></wa-divider>
+                    <wa-dropdown-item value="delete" variant="danger"><wa-icon slot="icon" name="trash-2"></wa-icon>Supprimer la rubrique</wa-dropdown-item>
+                  </wa-dropdown>
+                </div>
+
+                <div class="rows" v-sortable="{ group: 'buttons', onMove }" :data-key="s.id">
+                  <div v-for="(b, j) in s.buttons" :key="b.id" class="row" :data-id="b.id">
+                    <wa-icon class="grip" name="grip-vertical" label="Glisser pour déplacer"></wa-icon>
+                    <button type="button" class="row__main" @click="openButton(s.id, b.id)">
+                      <span class="row__dot" :style="{ background: colorOf(b, flatIndex(b.id), d.look.palette).bg, color: colorOf(b, flatIndex(b.id), d.look.palette).fg }">
+                        <wa-icon v-if="isIconName(b.icon)" :name="b.icon"></wa-icon>
+                        <template v-else>{{ b.icon }}</template>
+                      </span>
+                      <span class="row__text">
+                        <span class="row__label">{{ labelOf(b) }}</span>
+                        <span class="row__meta" :class="{ 'row__meta--warn': linkOf(d, b).problem }">{{ linkOf(d, b).problem || describeLink(b) }}</span>
+                      </span>
+                    </button>
+                    <wa-dropdown placement="bottom-end" @wa-select="buttonAction($event, s, j)">
+                      <wa-button slot="trigger" size="s" appearance="plain" aria-label="Actions du bouton">
+                        <wa-icon name="ellipsis"></wa-icon>
+                      </wa-button>
+                      <wa-dropdown-item value="edit"><wa-icon slot="icon" name="pencil"></wa-icon>Modifier</wa-dropdown-item>
+                      <wa-dropdown-item value="duplicate"><wa-icon slot="icon" name="copy"></wa-icon>Dupliquer</wa-dropdown-item>
+                      <wa-divider></wa-divider>
+                      <wa-dropdown-item value="delete" variant="danger"><wa-icon slot="icon" name="trash-2"></wa-icon>Supprimer</wa-dropdown-item>
+                    </wa-dropdown>
+                  </div>
+                </div>
+
+                <div>
+                  <wa-button size="s" appearance="plain" variant="brand" @click="openButton(s.id, null)">
+                    <wa-icon slot="start" name="plus"></wa-icon>Ajouter un bouton
+                  </wa-button>
+                </div>
+              </section>
+
+              <div class="wa-cluster wa-gap-xs">
+                <wa-button size="s" appearance="outlined" @click="addSection()">
+                  <wa-icon slot="start" name="list-plus"></wa-icon>Nouvelle rubrique
+                </wa-button>
+              </div>
+
+              <wa-callout v-if="missingPages.length" variant="brand" appearance="filled" size="s">
+                <wa-icon slot="icon" name="info"></wa-icon>
+                <div class="wa-stack wa-gap-xs">
+                  <span><strong>{{ missingPages.length }} page{{ missingPages.length > 1 ? 's' : '' }} sans bouton</strong> :
+                    {{ missingPages.map(p => p.name).join(', ') }}</span>
+                  <div><wa-button size="s" variant="brand" @click="addMissing">Les ajouter</wa-button></div>
+                </div>
+              </wa-callout>
+            </div>
+          </wa-tab-panel>
+
+          <!-- Apparence ---------------------------------------------- -->
+          <wa-tab-panel name="apparence">
+            <div class="wa-stack wa-gap-2xl">
+              <choice-grid label="Forme des boutons" :value="d.look.shape" :options="choices.shape" @change="v => d.look.shape = v"></choice-grid>
+              <choice-grid label="Couleurs" :value="d.look.palette" :options="choices.palette" small @change="v => d.look.palette = v"></choice-grid>
+
+              <div class="wa-stack wa-gap-m">
+                <choice-grid label="En-tête" :value="d.header.style" :options="choices.header" @change="v => d.header.style = v"></choice-grid>
+                <template v-if="d.header.style !== 'none'">
+                  <wa-input label="Titre" :value.prop="d.header.title" @input="d.header.title = $event.target.value"></wa-input>
+                  <wa-textarea label="Sous-titre" rows="2" resize="auto" :value.prop="d.header.subtitle" @input="d.header.subtitle = $event.target.value"></wa-textarea>
+                  <div class="wa-stack wa-gap-2xs">
+                    <wa-input label="Logo" type="url" placeholder="Adresse d'une image (https://…)" hint="PNG ou SVG à fond transparent conseillé."
+                      :value.prop="d.header.logo.startsWith('data:') ? '' : d.header.logo" @input="d.header.logo = $event.target.value.trim()"></wa-input>
+                    <div class="wa-cluster wa-gap-xs">
+                      <wa-button size="s" appearance="outlined" @click="$refs.logoFile.click()"><wa-icon slot="start" name="image-up"></wa-icon>Importer un fichier</wa-button>
+                      <wa-button v-if="d.header.logo" size="s" appearance="plain" @click="d.header.logo = ''">Retirer</wa-button>
+                      <img v-if="d.header.logo" class="thumb thumb--logo" :src="d.header.logo" alt="Logo actuel">
+                      <input ref="logoFile" type="file" accept="image/*" hidden @change="importImage($event, v => d.header.logo = v, true)">
+                    </div>
+                  </div>
+                  <wa-radio-group label="Alignement de l'en-tête" orientation="horizontal" :value.prop="d.header.align" @change="d.header.align = $event.target.value">
+                    <wa-radio appearance="button" value="left">À gauche</wa-radio>
+                    <wa-radio appearance="button" value="center">Centré</wa-radio>
+                  </wa-radio-group>
+                </template>
+              </div>
+
+              <div class="wa-stack wa-gap-m">
+                <choice-grid label="Fond" :value="d.background.type" :options="choices.background" @change="v => d.background.type = v"></choice-grid>
+                <wa-color-picker v-if="d.background.type === 'color'" label="Couleur de fond" :value.prop="d.background.color"
+                  :swatches.prop="backgroundColors" @change="d.background.color = $event.target.value"></wa-color-picker>
+                <template v-if="d.background.type === 'image'">
+                  <div class="wa-stack wa-gap-2xs">
+                    <wa-input label="Image" type="url" placeholder="Adresse d'une image (https://…)"
+                      :value.prop="d.background.image.startsWith('data:') ? '' : d.background.image" @input="d.background.image = $event.target.value.trim()"></wa-input>
+                    <div class="wa-cluster wa-gap-xs">
+                      <wa-button size="s" appearance="outlined" @click="$refs.bgFile.click()"><wa-icon slot="start" name="image-up"></wa-icon>Importer une photo</wa-button>
+                      <wa-button v-if="d.background.image" size="s" appearance="plain" @click="d.background.image = ''">Image par défaut</wa-button>
+                      <input ref="bgFile" type="file" accept="image/*" hidden @change="importImage($event, v => d.background.image = v, false)">
+                    </div>
+                  </div>
+                  <wa-radio-group label="Voile" hint="Assombrit ou éclaircit l'image pour garder le texte lisible." orientation="horizontal"
+                    :value.prop="d.background.tone" @change="d.background.tone = $event.target.value">
+                    <wa-radio appearance="button" value="dark">Sombre</wa-radio>
+                    <wa-radio appearance="button" value="light">Clair</wa-radio>
+                  </wa-radio-group>
+                  <wa-slider label="Intensité du voile" min="0" max="0.9" step="0.05" with-tooltip
+                    :value-formatter.prop="v => Math.round(v * 100) + ' %'" :value.prop="d.background.veil" @input="d.background.veil = Number($event.target.value)"></wa-slider>
+                  <wa-radio-group label="Ajustement" orientation="horizontal" :value.prop="d.background.fit" @change="d.background.fit = $event.target.value">
+                    <wa-radio appearance="button" value="cover">Remplir</wa-radio>
+                    <wa-radio appearance="button" value="contain">Contenir</wa-radio>
+                  </wa-radio-group>
+                </template>
+              </div>
+
+              <div class="wa-stack wa-gap-m">
+                <span class="field-label">Disposition</span>
+                <wa-radio-group label="Taille des boutons" orientation="horizontal" :value.prop="d.look.size" @change="d.look.size = $event.target.value">
+                  <wa-radio appearance="button" value="s">Petite</wa-radio>
+                  <wa-radio appearance="button" value="m">Moyenne</wa-radio>
+                  <wa-radio appearance="button" value="l">Grande</wa-radio>
+                </wa-radio-group>
+                <wa-radio-group label="Alignement des boutons" orientation="horizontal" :value.prop="d.look.align" @change="d.look.align = $event.target.value">
+                  <wa-radio appearance="button" value="left">À gauche</wa-radio>
+                  <wa-radio appearance="button" value="center">Centré</wa-radio>
+                </wa-radio-group>
+                <wa-select v-if="d.look.shape === 'tuile' || d.look.shape === 'aplat'" label="Colonnes" :value.prop="String(d.look.columns)"
+                  @change="d.look.columns = Number($event.target.value)">
+                  <wa-option value="0">Automatique (selon la largeur)</wa-option>
+                  <wa-option v-for="n in 6" :key="n" :value="String(n)">{{ n }}</wa-option>
+                </wa-select>
+              </div>
+            </div>
+          </wa-tab-panel>
+
+          <!-- Réglages ----------------------------------------------- -->
+          <wa-tab-panel name="reglages">
+            <div class="wa-stack wa-gap-xl">
+              <wa-textarea label="Pied de page" rows="2" resize="auto" placeholder="ex. Direction de l'innovation numérique — contact : …"
+                :value.prop="d.footer" @input="d.footer = $event.target.value"></wa-textarea>
+              <wa-switch :checked.prop="d.numbering" @change="d.numbering = $event.target.checked">Numéroter les rubriques (« 1 - … »)</wa-switch>
+              <wa-switch :checked.prop="d.showEditButton" hint="Masqué : passez par « Ouvrir la configuration » dans le panneau de Grist. Les lecteurs ne le voient jamais."
+                @change="d.showEditButton = $event.target.checked">Afficher le bouton « Modifier » au survol</wa-switch>
+              <wa-input label="Adresse du document" type="url" :hint="docBaseHint" placeholder="Détectée automatiquement"
+                :value.prop="d.docUrl" @input="d.docUrl = $event.target.value.trim()"></wa-input>
+
+              <wa-divider></wa-divider>
+
+              <div class="wa-stack wa-gap-s">
+                <span class="field-label">Modèle</span>
+                <div><wa-button size="s" appearance="outlined" @click="store.gallery = true">
+                  <wa-icon slot="start" name="layout-template"></wa-icon>Changer de modèle…
+                </wa-button></div>
+              </div>
+
+              <div class="wa-stack wa-gap-s">
+                <span class="field-label">Réutiliser dans un autre document</span>
+                <div class="wa-cluster wa-gap-xs">
+                  <wa-copy-button :value.prop="exportJson" tooltip="copy" success-label="Configuration copiée">
+                    <wa-button size="s" appearance="outlined"><wa-icon slot="start" name="copy"></wa-icon>Copier la configuration</wa-button>
+                  </wa-copy-button>
+                </div>
+                <wa-textarea rows="3" placeholder="Collez ici une configuration copiée depuis un autre hub" :value.prop="importText" @input="importText = $event.target.value"></wa-textarea>
+                <div><wa-button size="s" appearance="outlined" :disabled.prop="!importText.trim()" @click="importConfig">Importer</wa-button></div>
+              </div>
+
+              <div><wa-button size="s" variant="danger" appearance="plain" @click="reset">
+                <wa-icon slot="start" name="trash-2"></wa-icon>Repartir d'une page vierge
+              </wa-button></div>
+              <p class="wa-caption-xs wa-color-text-quiet">Hub de navigation — version {{ version }}</p>
+            </div>
+          </wa-tab-panel>
+        </wa-tab-group>
+      </div>
+    </template>
+
+    <!-- ============================================================ -->
+    <!-- Dialogue bouton : 1. Où mène-t-il ? 2. À quoi ressemble-t-il ?-->
+    <!-- ============================================================ -->
+    <template id="tpl-button-dialog">
+      <wa-dialog :open.prop="!!store.dialog" :label="store.dialog && store.dialog.isNew ? 'Nouveau bouton' : 'Modifier le bouton'"
+        class="button-dialog" @wa-hide="onHide">
+        <div v-if="f" class="wa-stack wa-gap-xl">
+          <div class="dialog-preview"><hub-view :config="preview" mode="static"></hub-view></div>
+
+          <section class="step wa-stack wa-gap-m">
+            <h3 class="step__title"><span class="step__num">1</span>Où mène ce bouton&nbsp;?</h3>
+            <div class="choices choices--two" role="radiogroup" aria-label="Destination">
+              <button type="button" class="choice choice--row" role="radio" :aria-checked="String(f.kind === 'page')" @click="setKind('page')">
+                <wa-icon name="file-text"></wa-icon>
+                <span class="choice__text"><span class="choice__label">Une page du document</span><span class="wa-caption-s wa-color-text-quiet">Tableaux, cartes, fiches…</span></span>
+              </button>
+              <button type="button" class="choice choice--row" role="radio" :aria-checked="String(f.kind === 'url')" @click="setKind('url')">
+                <wa-icon name="globe"></wa-icon>
+                <span class="choice__text"><span class="choice__label">Un site web</span><span class="wa-caption-s wa-color-text-quiet">Intranet, partenaire, courriel…</span></span>
+              </button>
+            </div>
+
+            <template v-if="f.kind === 'page'">
+              <template v-if="store.pages.length">
+                <wa-input v-if="store.pages.length > 8" size="s" placeholder="Rechercher une page" with-clear
+                  :value.prop="pageQuery" @input="pageQuery = $event.target.value"><wa-icon slot="start" name="search"></wa-icon></wa-input>
+                <div class="page-list" role="radiogroup" aria-label="Page de destination">
+                  <button v-for="p in pages" :key="p.viewRef" type="button" class="page-item" role="radio"
+                    :aria-checked="String(f.page === p.viewRef)" :style="{ '--depth': p.depth }" @click="choosePage(p)">
+                    <wa-icon name="file"></wa-icon>
+                    <span class="page-item__name">{{ p.name }}</span>
+                    <wa-badge v-if="p.isHub" variant="neutral" appearance="outlined">ce hub</wa-badge>
+                    <wa-icon v-if="f.page === p.viewRef" class="page-item__check" name="check"></wa-icon>
+                  </button>
+                  <p v-if="!pages.length" class="wa-caption-m wa-color-text-quiet">Aucune page ne correspond.</p>
+                </div>
+              </template>
+              <wa-input v-else type="number" label="Numéro de la page" hint="Visible dans l'adresse de la page : …/p/3"
+                :value.prop="f.page || ''" @input="f.page = Number($event.target.value) || null"></wa-input>
+            </template>
+            <template v-else>
+              <wa-input class="f-url" label="Adresse" type="url" placeholder="https://www.grandlyon.com" :value.prop="f.url" @input="f.url = $event.target.value">
+                <wa-icon slot="start" name="globe"></wa-icon>
+              </wa-input>
+              <wa-switch :checked.prop="f.newTab" @change="f.newTab = $event.target.checked">Ouvrir dans un nouvel onglet</wa-switch>
+            </template>
+            <wa-callout v-if="tried && error" variant="danger" size="s"><wa-icon slot="icon" name="circle-alert"></wa-icon>{{ error }}</wa-callout>
+          </section>
+
+          <section class="step wa-stack wa-gap-m">
+            <h3 class="step__title"><span class="step__num">2</span>À quoi ressemble-t-il&nbsp;?</h3>
+            <wa-input class="f-label" label="Libellé" maxlength="80" :value.prop="f.label" @input="f.label = $event.target.value"
+              :placeholder="f.kind === 'page' ? 'Nom de la page' : 'Texte du bouton'"
+              :hint="f.kind === 'page' ? 'Laissez vide pour reprendre le nom de la page.' : ''"></wa-input>
+            <wa-textarea label="Description" rows="2" resize="auto" placeholder="Une phrase pour préciser la destination (facultatif)"
+              :value.prop="f.description" @input="f.description = $event.target.value"></wa-textarea>
+            <div class="wa-stack wa-gap-xs">
+              <span class="field-label">Icône</span>
+              <wa-input size="s" placeholder="Rechercher : budget, carte, équipe…" with-clear :value.prop="iconQuery" @input="iconQuery = $event.target.value">
+                <wa-icon slot="start" name="search"></wa-icon>
+              </wa-input>
+              <div class="icon-grid" role="radiogroup" aria-label="Icône">
+                <button v-for="i in icons" :key="i.name" type="button" class="icon-choice" role="radio" :title="i.label" :aria-label="i.label"
+                  :aria-checked="String(f.icon === i.name)" @click="f.icon = i.name"><wa-icon :name="i.name"></wa-icon></button>
+                <button type="button" class="icon-choice icon-choice--none" role="radio" :aria-checked="String(!f.icon)" @click="f.icon = ''">Aucune</button>
+              </div>
+            </div>
+            <div class="wa-stack wa-gap-xs">
+              <span class="field-label">Couleur</span>
+              <div class="wa-cluster wa-gap-xs" role="radiogroup" aria-label="Couleur">
+                <button v-for="[id, label] in colors" :key="id" type="button" class="swatch" role="radio" :title="label" :aria-label="label"
+                  :aria-checked="String(f.color === id)" :style="{ background: id === 'auto' ? autoGradient : COLORS[id].bg }" @click="f.color = id"></button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <wa-button v-if="store.dialog && !store.dialog.isNew" slot="footer" class="dialog-delete" variant="danger" appearance="plain" @click="remove">
+          <wa-icon slot="start" name="trash-2"></wa-icon>Supprimer
+        </wa-button>
+        <wa-button slot="footer" appearance="plain" @click="store.dialog = null">Annuler</wa-button>
+        <wa-button slot="footer" variant="brand" @click="save">{{ store.dialog && store.dialog.isNew ? 'Ajouter' : 'Enregistrer' }}</wa-button>
+      </wa-dialog>
+    </template>
+  </body>
+</html>
