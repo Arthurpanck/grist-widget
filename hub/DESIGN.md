@@ -176,7 +176,7 @@ Un **aperçu du bouton** est rendu en temps réel en tête du dialogue. Pied du 
 | Icônes | **Lucide** (ISC, via la bibliothèque d'icônes de Web Awesome) | Plus de 1 500 icônes cohérentes, chargées à la demande. |
 | Glisser-déposer | **SortableJS** (MIT) | Glisser-déposer tactile et entre listes, en quelques lignes. |
 
-Toutes les versions sont épinglées et chargées depuis jsDelivr (un seul domaine à autoriser).
+Toutes les versions sont épinglées et copiées dans `vendor/` (script `tools/vendor.sh`) : GitHub Pages sert le widget et ses librairies, sans dépendre d'un CDN.
 
 **Organisation du code**
 
@@ -184,6 +184,7 @@ Toutes les versions sont épinglées et chargées depuis jsDelivr (un seul domai
 |---|---|
 | `js/config.js` | Schéma, valeurs par défaut, migration, modèles, palettes, catalogue d'icônes. Aucune dépendance. |
 | `js/grist.js` | Échanges avec Grist : options, pages, adresse du document. |
+| `js/libs.js` | Point d'entrée des librairies copiées dans `vendor/`. |
 | `js/app.js` | Application Vue et composants. |
 | `index.html` | Gabarits des composants (`<template>`). |
 | `hub.css` | Jetons de la charte et apparence des boutons du hub. |

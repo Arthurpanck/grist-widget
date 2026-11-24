@@ -6,12 +6,12 @@
     <title>Hub de navigation</title>
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
     <!-- Web Awesome : thème, couleurs et utilitaires (sans les « styles natifs », qui restylent tous les <button>). -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/styles/themes/default.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/styles/color/variants.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/styles/utilities.css">
+    <link rel="stylesheet" href="vendor/webawesome/styles/themes/default.css">
+    <link rel="stylesheet" href="vendor/webawesome/styles/color/variants.css">
+    <link rel="stylesheet" href="vendor/webawesome/styles/utilities.css">
     <link rel="stylesheet" href="hub.css">
-    <!-- Chargeur Web Awesome : charge chaque composant à la demande (même version que js/libs.js). -->
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/webawesome.loader.js"></script>
+    <!-- Chargeur Web Awesome : charge chaque composant à la demande (librairies dans vendor/, voir tools/vendor.sh). -->
+    <script type="module" src="vendor/webawesome/webawesome.loader.js" data-webawesome="vendor/webawesome"></script>
     <script type="module" src="js/app.js"></script>
   </head>
   <body>

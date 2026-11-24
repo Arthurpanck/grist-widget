@@ -88,7 +88,7 @@ Les configurations créées avec la première version du hub sont reprises autom
 ## Conception et code
 
 - La conception (parcours, écrans, principes, modèle de données) est décrite dans [DESIGN.md](DESIGN.md).
-- L'interface repose sur des librairies maintenues, chargées depuis jsDelivr, sans étape de compilation :
+- L'interface repose sur des librairies maintenues, **copiées dans `vendor/`** et servies par GitHub Pages avec le widget : aucun CDN externe, aucune étape de compilation. Pour changer de version, modifiez `tools/vendor.sh` puis relancez `bash hub/tools/vendor.sh`.
 
 | Librairie | Rôle |
 |---|---|
@@ -104,7 +104,8 @@ Les configurations créées avec la première version du hub sont reprises autom
 | `js/config.js` | Schéma, migration, modèles, palettes, icônes (sans dépendance). |
 | `js/grist.js` | Échanges avec Grist. |
 | `js/app.js` | Composants Vue. |
-| `js/libs.js` | Versions épinglées des librairies. |
+| `js/libs.js` | Point d'entrée des librairies de `vendor/`. |
+| `vendor/`, `tools/vendor.sh` | Librairies embarquées (versions dans `vendor/VERSIONS.md`) et script qui les copie. |
 
 La configuration est enregistrée dans les options du widget, sous la clé `hub` : rien n'est écrit dans les tables.
 Ouvert hors de Grist, le widget affiche une démonstration avec des pages fictives.
