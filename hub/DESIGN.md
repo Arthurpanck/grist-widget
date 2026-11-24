@@ -1,7 +1,21 @@
-# Hub de navigation — conception V2
+# Hub de navigation — conception
 
 Ce document fixe les choix d'interface avant le code. Il sert de référence pour toute évolution :
 une modification de l'interface commence ici.
+
+## 0. Version 3 : édition sur place (retenue)
+
+Après six pistes comparées (canevas « Hub — créer un bouton : 6 propositions »), la combinaison retenue est :
+
+| Étape | Choix | Origine |
+|---|---|---|
+| Créer | Case « Ajouter un bouton » à la fin de chaque rubrique, à l'endroit où le bouton apparaîtra ; elle contient un seul champ « Vers où mène ce bouton ? » (page suggérée ou adresse collée), Entrée pour créer, le champ reste ouvert pour enchaîner. | Pistes 1 et 2 |
+| Modifier | Clic sur un bouton : fiche ouverte à côté de lui, avec des champs nommés (nom, destination, icône, couleur, description, supprimer). | Piste 2 |
+| Déplacer | Glisser-déposer des boutons directement dans le hub, y compris entre rubriques. | Demande utilisateur |
+| Afficher | Panneau latéral « Affichage » (apparence, réglages), le hub restant visible à côté. | Pistes 2 et 3 |
+
+Les sections 3.1 et 3.2 ci-dessous décrivent la version 2 (galerie de modèles d'abord, panneau à onglets) ; la
+galerie reste disponible depuis l'état vide et les Réglages.
 
 ## 1. Pour qui, pour quoi
 

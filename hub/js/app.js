@@ -2,12 +2,18 @@
  * Hub de navigation — application Vue.
  * Les gabarits des composants sont dans index.html (<template id="tpl-…">).
  * Conception : voir DESIGN.md.
+ *
+ * Édition sur place :
+ *  1. créer  — une case « Ajouter un bouton » attend à la fin de chaque rubrique ; elle contient un seul
+ *              champ « Vers où mène ce bouton ? » (page du document ou adresse web) ;
+ *  2. modifier — un clic sur un bouton ouvre sa fiche à côté de lui ; on le glisse pour le déplacer ;
+ *  3. afficher — le panneau « Affichage » règle forme, couleurs, en-tête et fond.
  */
-import { createApp, reactive, computed, ref, watch, Sortable, registerIconLibrary, LUCIDE } from './libs.js';
+import { createApp, reactive, computed, ref, watch, onMounted, Sortable, registerIconLibrary, LUCIDE } from './libs.js';
 import * as C from './config.js';
 import * as G from './grist.js';
 
-export const APP_VERSION = '2.1.0';
+export const APP_VERSION = '3.0.0';
 console.info(`Hub de navigation ${APP_VERSION}`);
 
 // Icônes Lucide pour tous les <wa-icon> (les icônes internes de Web Awesome restent les siennes).
@@ -27,14 +33,14 @@ const store = reactive({
   baseline: '',         // brouillon initial, pour détecter les modifications
   editing: false,
   gallery: false,       // galerie de modèles ouverte
-  tab: 'contenu',
+  ghost: null,          // rubrique dont la case « Ajouter un bouton » est ouverte
+  editId: null,         // bouton dont la fiche est ouverte
+  panel: false,         // panneau Affichage / Réglages ouvert
+  panelTab: 'affichage',
   access: null,
   pages: [],
   pagesLoaded: false,
   docBase: null,
-  narrow: false,
-  mobilePreview: false,
-  dialog: null,         // { sectionId, isNew, form }
   confirm: null,        // { label, text, ok, resolve }
 });
 
@@ -56,18 +62,31 @@ function ask(options) {
 }
 
 /* ================================================================== */
-/* Liens                                                               */
+/* Liens et boutons                                                    */
 /* ================================================================== */
 
 const pageOf = viewRef => store.pages.find(p => p.viewRef === viewRef);
 const isIconName = icon => /^[a-z0-9-]+$/.test(icon || '');
+const sectionOf = id => store.draft.sections.find(s => s.id === id);
+
+function findButton(id) {
+  for (const section of store.draft.sections) {
+    const index = section.buttons.findIndex(b => b.id === id);
+    if (index >= 0) { return { section, index, button: section.buttons[index] }; }
+  }
+  return null;
+}
 
 function hostOf(url) {
   try { return new URL(C.safeUrl(url)).hostname.replace(/^www\./, ''); } catch (e) { return ''; }
 }
 
+function autoLabel(b) {
+  return (b.kind === 'page' ? pageOf(b.page)?.name : hostOf(b.url)) || '';
+}
+
 function labelOf(b) {
-  return b.label.trim() || (b.kind === 'page' ? pageOf(b.page)?.name : hostOf(b.url)) || 'Sans titre';
+  return b.label.trim() || autoLabel(b) || 'Sans titre';
 }
 
 function linkOf(cfg, b) {
@@ -87,19 +106,30 @@ function linkOf(cfg, b) {
 function describeLink(b) {
   if (b.kind === 'url') { return hostOf(b.url) || 'Site web'; }
   const p = pageOf(b.page);
-  return p ? `Page « ${p.name} »` : 'Page';
+  return p ? `Page « ${p.name} »` : 'Page à choisir';
 }
+
+const iconFor = dest => (dest.kind === 'url' ? 'globe' : C.guessIcon(pageOf(dest.page)?.name));
+
+function addButton(sectionId, dest) {
+  sectionOf(sectionId).buttons.push(C.newButton({ ...dest, icon: iconFor(dest) }));
+}
+
+// Une adresse plutôt qu'un nom de page : schéma connu, « www. » ou nom de domaine.
+const looksLikeUrl = text => /^(https?:\/\/|www\.|mailto:|tel:)/i.test(text) || /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(text);
+const normalizeText = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+let lastDrag = 0;
 
 /* ================================================================== */
 /* Composants                                                          */
 /* ================================================================== */
 
-/** Le hub lui-même. mode : view (liens actifs) | edit (clic = modifier) | static (aperçus). */
+/** Le hub. mode : view (liens actifs) | edit (édition sur place) | static (miniatures). */
 const HubView = {
   template: '#tpl-hub',
   props: { config: Object, mode: { type: String, default: 'view' } },
-  emits: ['pick'],
-  setup(props, { emit }) {
+  setup(props) {
     const m = computed(() => {
       const c = props.config;
       let index = 0, number = 0;
@@ -139,7 +169,9 @@ const HubView = {
 
     function click(event, item) {
       if (props.mode === 'edit') {
-        emit('pick', item.b.id);
+        if (Date.now() - lastDrag < 300) { return; }   // fin d'un glisser-déposer, pas un clic
+        store.ghost = null;
+        store.editId = item.b.id;
       } else if (props.mode === 'view' && !item.link.href) {
         notify(item.link.missingBase
           ? 'Adresse du document inconnue : accordez l\'accès complet au widget, ou renseignez l\'adresse du document dans les réglages du hub.'
@@ -147,11 +179,159 @@ const HubView = {
       }
     }
 
-    return { m, rootStyle, tagOf, click, isIconName };
+    // Glisser-déposer des boutons, y compris d'une rubrique à l'autre (mode édition uniquement).
+    const sortable = computed(() => (props.mode !== 'edit' ? null : {
+      onMove({ from, to, oldIndex, newIndex }) {
+        const [b] = sectionOf(from).buttons.splice(oldIndex, 1);
+        sectionOf(to).buttons.splice(newIndex, 0, b);
+      },
+    }));
+
+    function addSection() {
+      const s = C.newSection();
+      store.draft.sections.push(s);
+      store.editId = null;
+      store.ghost = s.id;
+    }
+
+    async function removeSection(id) {
+      const s = sectionOf(id);
+      const n = s.buttons.length;
+      if (n && !(await ask({ label: 'Supprimer la rubrique ?', text: `Ses ${n} bouton${n > 1 ? 's' : ''} seront supprimés.`, ok: 'Supprimer' }))) { return; }
+      store.draft.sections.splice(store.draft.sections.indexOf(s), 1);
+    }
+
+    const setTitle = (id, title) => { sectionOf(id).title = title; };
+
+    return { m, rootStyle, tagOf, click, sortable, addSection, removeSection, setTitle, isIconName, store };
   },
 };
 
-/** Galerie « Que doit faire cette page d'accueil ? ». */
+/** Champ unique « Vers où mène ce bouton ? » : pages du document suggérées, ou adresse web collée. */
+let pickerCount = 0;
+const DestPicker = {
+  template: '#tpl-dest',
+  props: { label: String, placeholder: String, autofocus: Boolean },
+  emits: ['pick', 'cancel', 'leave'],
+  setup(props, { emit }) {
+    const uid = 'dest' + (++pickerCount);
+    const query = ref('');
+    const active = ref(0);
+    const input = ref(null);
+
+    const options = computed(() => {
+      const text = query.value.trim();
+      const q = normalizeText(text);
+      const list = [];
+      if (text && looksLikeUrl(text) && C.safeUrl(text)) {
+        const url = C.safeUrl(text);
+        list.push({ key: 'url', kind: 'url', url, icon: 'globe', label: hostOf(url) || url, hint: 'Lien web' });
+      }
+      const used = store.draft ? new Set(C.allButtons(store.draft).filter(b => b.kind === 'page').map(b => b.page)) : new Set();
+      store.pages
+        .filter(p => !p.isHub && (!q || normalizeText(p.name).includes(q)))
+        .sort((a, b) => used.has(a.viewRef) - used.has(b.viewRef))
+        .slice(0, 8)
+        .forEach(p => list.push({ key: 'p' + p.viewRef, kind: 'page', page: p.viewRef, icon: C.guessIcon(p.name), label: p.name,
+          hint: used.has(p.viewRef) ? 'déjà sur le hub' : '' }));
+      return list;
+    });
+
+    const emptyText = computed(() => {
+      if (!store.pages.length) { return 'Collez une adresse web (https://…). Pour choisir une page, accordez l\'accès complet au widget.'; }
+      return query.value.trim() ? 'Aucune page ne correspond. Collez une adresse web pour créer un lien.' : 'Collez une adresse web (https://…).';
+    });
+
+    watch(options, () => { active.value = 0; });
+
+    function pick(o) {
+      emit('pick', o.kind === 'url' ? { kind: 'url', url: o.url } : { kind: 'page', page: o.page });
+      query.value = '';
+      input.value?.focus();
+    }
+
+    function onKey(e) {
+      const n = options.value.length;
+      if (e.key === 'ArrowDown' && n) { e.preventDefault(); active.value = (active.value + 1) % n; }
+      else if (e.key === 'ArrowUp' && n) { e.preventDefault(); active.value = (active.value - 1 + n) % n; }
+      else if (e.key === 'Enter') { e.preventDefault(); if (options.value[active.value]) { pick(options.value[active.value]); } }
+      else if (e.key === 'Escape') { e.preventDefault(); emit('cancel'); }
+    }
+
+    function onFocusOut(e) {
+      if (!e.currentTarget.contains(e.relatedTarget) && !query.value.trim()) { emit('leave'); }
+    }
+
+    onMounted(() => { if (props.autofocus) { input.value?.focus(); } });
+
+    return { uid, query, active, input, options, emptyText, pick, onKey, onFocusOut };
+  },
+};
+
+/** Case « Ajouter un bouton », à la fin de chaque rubrique. */
+const GhostTile = {
+  template: '#tpl-ghost',
+  props: { sectionId: String },
+  setup(props) {
+    const active = computed(() => store.ghost === props.sectionId);
+    const open = () => { store.editId = null; store.ghost = props.sectionId; };
+    const close = () => { if (store.ghost === props.sectionId) { store.ghost = null; } };
+    const create = dest => addButton(props.sectionId, dest);
+    return { active, open, close, create };
+  },
+};
+
+/** Fiche d'un bouton, ouverte à côté de lui : nom, destination, icône, couleur, description. */
+const ButtonCard = {
+  template: '#tpl-card',
+  setup() {
+    const found = computed(() => (store.editId ? findButton(store.editId) : null));
+    const b = computed(() => found.value?.button);
+    const changing = ref(false);
+    const moreIcons = ref(false);
+    const iconQuery = ref('');
+    watch(() => store.editId, () => { changing.value = false; moreIcons.value = false; iconQuery.value = ''; });
+
+    const iconChoices = computed(() => {
+      if (!b.value) { return []; }
+      const names = [b.value.icon, C.guessIcon(labelOf(b.value)), 'file-text', 'table-2', 'layout-dashboard', 'users', 'calendar-days', 'map', 'book-open', 'globe'];
+      return [...new Set(names.filter(isIconName))].slice(0, 6).map(n => C.ICONS.find(i => i.name === n) || { name: n, label: n });
+    });
+    const icons = computed(() => C.searchIcons(iconQuery.value));
+
+    function setDest(dest) {
+      const before = iconFor(b.value);
+      Object.assign(b.value, dest.kind === 'url' ? { kind: 'url', url: dest.url } : { kind: 'page', page: dest.page });
+      if (!b.value.icon || b.value.icon === before || b.value.icon === 'arrow-right') { b.value.icon = iconFor(dest); }
+      changing.value = false;
+    }
+
+    function remove() {
+      found.value.section.buttons.splice(found.value.index, 1);
+      store.editId = null;
+    }
+
+    function onHide(event, id) {
+      if (event.target === event.currentTarget && store.editId === id) { store.editId = null; }
+    }
+
+    const chartColors = computed(() => C.charteOf(store.draft).colors);
+    const colors = computed(() => [['auto', 'Automatique']].concat(Object.entries(chartColors.value).map(([id, c]) => [id, c.label])));
+    const autoGradient = computed(() => {
+      const ch = C.charteOf(store.draft);
+      const cycle = ch.palettes[store.draft.look.palette].cycle.map(id => ch.colors[id].bg);
+      return `conic-gradient(${cycle.map((c, i) => `${c} ${(i / cycle.length) * 100}% ${((i + 1) / cycle.length) * 100}%`).join(', ')})`;
+    });
+
+    return {
+      b, changing, moreIcons, iconQuery, iconChoices, icons, setDest, remove, onHide, colors, autoGradient, chartColors,
+      describe: computed(() => (b.value ? describeLink(b.value) : '')),
+      placeholder: computed(() => (b.value ? autoLabel(b.value) || 'Texte du bouton' : '')),
+    };
+  },
+};
+
+/** Galerie de modèles (facultative : « partir d'un modèle »). */
 const TemplateGallery = {
   template: '#tpl-gallery',
   props: { cancellable: Boolean },
@@ -169,80 +349,36 @@ const ChoiceGrid = {
   emits: ['change'],
 };
 
-/** Réordonnancement par glisser-déposer (SortableJS) ; Vue reste maître du DOM. */
+/** Glisser-déposer (SortableJS) ; Vue reste maître du DOM : on annule le déplacement puis on change les données. */
 const vSortable = {
   mounted(el, { value }) {
+    if (!value) { return; }
     el._sortable = Sortable.create(el, {
-      group: value.group,
-      handle: '.grip',
+      group: 'hub-buttons',
+      draggable: '.hub-btn',
+      filter: '.hub-adder',
+      preventOnFilter: false,
       animation: 150,
+      onMove: e => (e.related.classList.contains('hub-adder') ? -1 : true),
       onEnd(e) {
+        lastDrag = Date.now();
         if (e.from === e.to && e.oldIndex === e.newIndex) { return; }
         e.to.removeChild(e.item);
         e.from.insertBefore(e.item, e.from.children[e.oldIndex] || null);
-        value.onMove({ from: e.from.dataset.key, to: e.to.dataset.key, oldIndex: e.oldIndex, newIndex: e.newIndex });
+        value.onMove({ from: e.from.dataset.key, to: e.to.dataset.key, oldIndex: e.oldDraggableIndex, newIndex: e.newDraggableIndex });
       },
     });
   },
   unmounted(el) { el._sortable?.destroy(); },
 };
 
-/** Panneau d'édition : Contenu / Apparence / Réglages. */
-const EditorPanel = {
-  template: '#tpl-editor',
-  emits: ['done', 'cancel'],
+/** Panneau latéral : Affichage (forme, couleurs, en-tête, fond, disposition) et Réglages. */
+const SettingsPanel = {
+  template: '#tpl-settings',
   setup() {
     const d = computed(() => store.draft);
-    const section = id => store.draft.sections.find(s => s.id === id);
 
-    const missingPages = computed(() => {
-      const used = new Set(C.allButtons(store.draft).filter(b => b.kind === 'page').map(b => b.page));
-      return store.pages.filter(p => !p.isHub && !used.has(p.viewRef));
-    });
-
-    function addMissing() {
-      const target = store.draft.sections.find(s => !s.title) || store.draft.sections[0] || addSection('');
-      target.buttons.push(...missingPages.value.map(p => C.newButton({ page: p.viewRef, icon: C.guessIcon(p.name) })));
-      notify('Pages ajoutées.', 'success', 3000);
-    }
-
-    function addSection(title = 'Nouvelle rubrique') {
-      const s = C.newSection({ title });
-      store.draft.sections.push(s);
-      return s;
-    }
-
-    function moveSection(i, delta) {
-      const list = store.draft.sections;
-      if (i + delta < 0 || i + delta >= list.length) { return; }
-      list.splice(i + delta, 0, list.splice(i, 1)[0]);
-    }
-
-    async function sectionAction(event, i) {
-      const action = event.detail.item.value;
-      const s = store.draft.sections[i];
-      if (action === 'up') { moveSection(i, -1); }
-      if (action === 'down') { moveSection(i, 1); }
-      if (action === 'delete') {
-        const n = s.buttons.length;
-        if (n && !(await ask({ label: 'Supprimer la rubrique ?', text: `Ses ${n} bouton${n > 1 ? 's' : ''} seront supprimés.`, ok: 'Supprimer' }))) { return; }
-        store.draft.sections.splice(i, 1);
-      }
-    }
-
-    function buttonAction(event, s, j) {
-      const action = event.detail.item.value;
-      if (action === 'edit') { openButton(s.id, s.buttons[j].id); }
-      if (action === 'duplicate') { s.buttons.splice(j + 1, 0, { ...clone(s.buttons[j]), id: C.uid('b') }); }
-      if (action === 'delete') { s.buttons.splice(j, 1); }
-    }
-
-    function onMove({ from, to, oldIndex, newIndex }) {
-      const [b] = section(from).buttons.splice(oldIndex, 1);
-      section(to).buttons.splice(newIndex, 0, b);
-    }
-
-    // Miniatures de l'onglet Apparence : le brouillon, réduit à quelques boutons.
+    // Miniatures : le brouillon, réduit à quelques boutons.
     function preview(patch) {
       const buttons = C.allButtons(store.draft).slice(0, 3);
       const sample = buttons.length ? buttons : C.SAMPLE_PAGES.slice(0, 3).map(p => C.newButton({ page: p.viewRef, label: p.name, icon: C.guessIcon(p.name) }));
@@ -305,8 +441,11 @@ const EditorPanel = {
 
     async function reset() {
       if (await ask({ label: 'Tout effacer ?', text: 'Le hub repartira d\'une page vierge.', ok: 'Tout effacer' })) {
-        store.draft = C.defaultConfig();
-        store.gallery = true;
+        const blank = C.defaultConfig();
+        blank.sections.push(C.newSection());
+        store.draft = blank;
+        store.ghost = blank.sections[0].id;
+        store.panel = false;
       }
     }
 
@@ -317,108 +456,10 @@ const EditorPanel = {
     });
 
     return {
-      store, d, missingPages, addMissing, addSection, sectionAction, buttonAction, onMove, choices,
-      importImage, importText, importConfig, reset, exportJson, docBaseHint,
-      openButton, labelOf, describeLink, linkOf, isIconName, colorOf: C.colorOf, flatIndex,
+      store, d, choices, setCharte, importImage, importText, importConfig, reset, exportJson, docBaseHint,
       backgroundColors: computed(() => C.charteOf(store.draft).backgrounds),
-      setCharte,
       version: APP_VERSION,
     };
-  },
-};
-
-// Rang d'un bouton dans tout le hub (pour la couleur automatique).
-function flatIndex(buttonId) {
-  return C.allButtons(store.draft).findIndex(b => b.id === buttonId);
-}
-
-function openButton(sectionId, buttonId) {
-  const s = store.draft.sections.find(x => x.id === sectionId) || store.draft.sections[0];
-  const b = buttonId && s.buttons.find(x => x.id === buttonId);
-  store.dialog = { sectionId: s.id, isNew: !b, form: b ? clone(b) : C.newButton(store.pages.length ? {} : { kind: 'url', icon: 'globe' }) };
-}
-
-function pickFromPreview(buttonId) {
-  const s = store.draft.sections.find(x => x.buttons.some(b => b.id === buttonId));
-  if (s) { openButton(s.id, buttonId); }
-}
-
-/** Dialogue « Nouveau bouton / Modifier le bouton » : 1. Où mène-t-il ? 2. À quoi ressemble-t-il ? */
-const ButtonDialog = {
-  template: '#tpl-button-dialog',
-  setup() {
-    const f = computed(() => store.dialog?.form);
-    const pageQuery = ref('');
-    const iconQuery = ref('');
-    const tried = ref(false);
-    watch(() => store.dialog, () => { pageQuery.value = ''; iconQuery.value = ''; tried.value = false; });
-
-    const pages = computed(() => {
-      const q = pageQuery.value.trim().toLowerCase();
-      return store.pages.filter(p => !q || p.name.toLowerCase().includes(q));
-    });
-    const icons = computed(() => C.searchIcons(iconQuery.value));
-    const error = computed(() => {
-      if (!f.value) { return ''; }
-      if (f.value.kind === 'page') { return f.value.page ? '' : 'Choisissez la page vers laquelle mène le bouton.'; }
-      return C.safeUrl(f.value.url) ? '' : 'Saisissez une adresse web valide (https://…).';
-    });
-
-    // Aperçu du bouton tel qu'il apparaîtra (la couleur automatique dépend de son rang dans le hub).
-    const preview = computed(() => {
-      const draft = store.draft;
-      const index = store.dialog.isNew ? C.allButtons(draft).length : flatIndex(f.value.id);
-      const color = C.colorOf(f.value, index, draft);
-      const id = Object.keys(C.charteOf(draft).colors).find(k => C.charteOf(draft).colors[k] === color);
-      const button = { ...f.value, color: id };
-      return C.normalize({ ...draft, header: { style: 'none' }, background: { type: 'default' }, footer: '',
-        look: { ...draft.look, align: 'left', columns: 1 }, sections: [{ id: 'apercu', title: '', buttons: [button] }] });
-    });
-
-    // Changer de destination adapte l'icône si elle n'a pas été choisie.
-    function setKind(kind) {
-      const defaults = ['arrow-right', 'globe', ''];
-      f.value.kind = kind;
-      if (defaults.includes(f.value.icon)) {
-        f.value.icon = kind === 'url' ? 'globe' : C.guessIcon(pageOf(f.value.page)?.name);
-      }
-    }
-
-    function choosePage(p) {
-      f.value.page = p.viewRef;
-      if (!f.value.icon || f.value.icon === 'arrow-right') { f.value.icon = C.guessIcon(p.name); }
-    }
-
-    function save() {
-      tried.value = true;
-      if (error.value) { return; }
-      const { sectionId, isNew, form } = store.dialog;
-      const s = store.draft.sections.find(x => x.id === sectionId);
-      if (isNew) { s.buttons.push(clone(form)); }
-      else { s.buttons.splice(s.buttons.findIndex(b => b.id === form.id), 1, clone(form)); }
-      store.dialog = null;
-    }
-
-    async function remove() {
-      const { sectionId, form } = store.dialog;
-      const s = store.draft.sections.find(x => x.id === sectionId);
-      s.buttons = s.buttons.filter(b => b.id !== form.id);
-      store.dialog = null;
-    }
-
-    function onHide(event) {
-      if (event.target === event.currentTarget) { store.dialog = null; }
-    }
-
-    const chartColors = computed(() => C.charteOf(store.draft).colors);
-    const colors = computed(() => [['auto', 'Automatique']].concat(Object.entries(chartColors.value).map(([id, c]) => [id, c.label])));
-    const autoGradient = computed(() => {
-      const ch = C.charteOf(store.draft);
-      const cycle = ch.palettes[store.draft.look.palette].cycle.map(id => ch.colors[id].bg);
-      return `conic-gradient(${cycle.map((c, i) => `${c} ${(i / cycle.length) * 100}% ${((i + 1) / cycle.length) * 100}%`).join(', ')})`;
-    });
-
-    return { store, f, pages, pageQuery, icons, iconQuery, error, tried, preview, setKind, choosePage, save, remove, onHide, colors, autoGradient, chartColors, isIconName };
   },
 };
 
@@ -467,12 +508,26 @@ async function loadContext() {
   }
 }
 
+/** Passe en édition. Une rubrique existe toujours ; si le hub est vide, la case d'ajout est déjà ouverte. */
 function startEditing(config = store.saved) {
-  store.draft = clone(config || C.defaultConfig());
-  store.baseline = JSON.stringify(store.draft);
+  const draft = clone(config || C.defaultConfig());
+  if (!draft.sections.length) { draft.sections.push(C.newSection()); }
+  store.draft = draft;
+  store.baseline = JSON.stringify(draft);
   store.editing = true;
-  store.tab = 'contenu';
+  store.editId = null;
+  store.panel = false;
+  store.ghost = isEmpty(draft) ? draft.sections[0].id : null;
   loadContext();
+}
+
+function stopEditing() {
+  store.editing = false;
+  store.gallery = false;
+  store.draft = null;
+  store.editId = null;
+  store.ghost = null;
+  store.panel = false;
 }
 
 const App = {
@@ -480,25 +535,28 @@ const App = {
   setup() {
     const config = computed(current);
     const dirty = computed(() => store.editing && JSON.stringify(store.draft) !== store.baseline);
-    const showGallery = computed(() => store.loaded && canEdit() && (store.gallery || (!store.editing && isEmpty(store.saved))));
-    const showFab = computed(() => canEdit() && !store.editing && !showGallery.value && store.saved?.showEditButton);
+    const showGallery = computed(() => store.loaded && canEdit() && store.gallery);
+    const emptyView = computed(() => !store.editing && isEmpty(store.saved));
+    const showFab = computed(() => canEdit() && !store.editing && !showGallery.value && !emptyView.value && store.saved?.showEditButton);
 
     function chooseTemplate(id) {
       const base = store.editing ? store.draft : store.saved;
       const cfg = C.fromTemplate(id, templatePages(), { ...C.normalize(base), sections: [] });
-      if (!store.editing) { startEditing(cfg); } else { store.draft = cfg; }
+      if (!store.editing) { startEditing(cfg); } else { store.draft = cfg; store.ghost = null; }
       store.gallery = false;
-      notify(`Modèle « ${C.TEMPLATES.find(t => t.id === id).label} » appliqué : personnalisez-le à droite.`, 'success', 5000);
+      notify(`Modèle « ${C.TEMPLATES.find(t => t.id === id).label} » appliqué : cliquez sur un bouton pour le modifier.`, 'success', 5000);
     }
 
     function startBlank() {
-      startEditing({ ...C.defaultConfig(), sections: [C.newSection()] });
+      const blank = C.defaultConfig();
+      blank.sections.push(C.newSection());
+      startEditing(blank);
       store.gallery = false;
-      openButton(store.draft.sections[0].id, null);
     }
 
     async function finish() {
       const cfg = C.normalize(store.draft);
+      cfg.sections = cfg.sections.filter(s => s.buttons.length || s.title);
       try {
         if (G.available) { await G.save(cfg); }
       } catch (e) {
@@ -506,9 +564,7 @@ const App = {
         return;
       }
       store.saved = cfg;
-      store.editing = false;
-      store.draft = null;
-      store.mobilePreview = false;
+      stopEditing();
       notify(G.available
         ? 'Hub mis à jour. Pour le conserver, cliquez sur « Enregistrer » dans le menu du widget Grist (icône mise en évidence en haut à droite).'
         : 'Hub mis à jour.', 'success', 12000);
@@ -516,10 +572,7 @@ const App = {
 
     async function cancel() {
       if (dirty.value && !(await ask({ label: 'Abandonner les modifications ?', text: 'Le hub reviendra à son dernier état appliqué.', ok: 'Abandonner' }))) { return; }
-      store.editing = false;
-      store.gallery = false;
-      store.draft = null;
-      store.mobilePreview = false;
+      stopEditing();
     }
 
     function answer(value) {
@@ -535,12 +588,7 @@ const App = {
       root.toggle('wa-brand-red', charte !== 'dsfr');
     }, { immediate: true });
 
-    const media = window.matchMedia('(max-width: 720px)');
-    const syncNarrow = () => { store.narrow = media.matches; };
-    media.addEventListener('change', syncNarrow);
-    syncNarrow();
-
-    return { store, config, dirty, showGallery, showFab, chooseTemplate, startBlank, finish, cancel, answer, startEditing, pickFromPreview, canEdit };
+    return { store, config, dirty, showGallery, emptyView, showFab, chooseTemplate, startBlank, finish, cancel, answer, startEditing, canEdit };
   },
 };
 
@@ -578,8 +626,8 @@ if (G.available) {
 /* Montage                                                             */
 /* ================================================================== */
 
-// Les gabarits sont dans index.html. Si la page hôte ne les contient pas (widget intégré ailleurs,
-// par exemple via le « Custom widget builder »), on les récupère à côté de ce script.
+// Les gabarits sont dans index.html. Si la page hôte ne les contient pas (widget intégré ailleurs),
+// on les récupère à côté de ce script.
 if (!document.getElementById('tpl-app')) {
   const html = await (await fetch(new URL('../index.html', import.meta.url))).text();
   const page = new DOMParser().parseFromString(html, 'text/html');
@@ -588,10 +636,12 @@ if (!document.getElementById('tpl-app')) {
 
 createApp(App)
   .component('hub-view', HubView)
+  .component('dest-picker', DestPicker)
+  .component('ghost-tile', GhostTile)
+  .component('button-card', ButtonCard)
   .component('template-gallery', TemplateGallery)
   .component('choice-grid', ChoiceGrid)
-  .component('editor-panel', EditorPanel)
-  .component('button-dialog', ButtonDialog)
+  .component('settings-panel', SettingsPanel)
   .directive('sortable', vSortable)
   .mount('#hub-root');
 

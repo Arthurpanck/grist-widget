@@ -20,54 +20,25 @@ Exemple de résultat (modèle « Accueil visuel ») :
 
 ## Utilisation
 
-**Premier lancement : « Que doit faire cette page d'accueil ? »**
+Tout se fait sur la page elle-même, bouton après bouton.
 
-Quatre modèles, prévisualisés avec les vraies pages du document. La page qui contient le hub est exclue d'office.
+1. **Créer.** À la fin de chaque rubrique, une case « Ajouter un bouton » attend à l'endroit où le bouton apparaîtra.
+   Elle contient un seul champ, « Vers où mène ce bouton ? » :
+   - on tape le nom d'une page (les pages sans bouton sont proposées en premier) ou on colle une adresse web ;
+   - **Entrée** crée le bouton, avec son nom et une icône devinée ;
+   - le champ reste ouvert pour le bouton suivant ; **Échap** le referme.
+2. **Modifier.** Un clic sur un bouton ouvre sa fiche, juste à côté : nom, destination (« Changer »), icône,
+   couleur, description, Supprimer. Chaque modification s'affiche aussitôt.
+3. **Déplacer.** On glisse un bouton pour changer sa place, y compris vers une autre rubrique. Les titres de rubrique
+   se modifient sur place ; « Ajouter une rubrique » en crée une nouvelle.
+4. **Afficher.** Le bouton « Affichage » ouvre un panneau à droite, le hub restant visible :
+   - onglet *Apparence* : charte (Métropole de Lyon ou DSFR), forme des boutons (tuiles, aplats, liste, pastilles),
+     couleurs, en-tête (titre, sous-titre, logo), fond (couleur ou image), disposition ;
+   - onglet *Réglages* : pied de page, numérotation des rubriques, adresse du document, modèles prêts à l'emploi,
+     copie de la configuration vers un autre document.
 
-| Modèle | Ce qu'il crée |
-|---|---|
-| Sommaire automatique | Un bouton par page. |
-| Portail par thèmes | Les pages réparties en rubriques (Pilotage, Données, Ressources), plus des liens utiles. |
-| Accueil visuel | Une image de fond et de grands aplats de couleur. |
-| Barre de raccourcis | Des pastilles compactes, à placer au-dessus d'un tableau. |
-
-On peut aussi partir d'une page vierge.
-
-**Onglet Contenu**
-- Les boutons sont rangés en rubriques ; le titre d'une rubrique se modifie sur place.
-- Glisser-déposer, y compris d'une rubrique à l'autre.
-- Menu `⋯` pour dupliquer, supprimer ou déplacer.
-- Un encart signale les pages qui n'ont pas encore de bouton et les ajoute en un clic.
-
-**Un bouton, deux questions**
-1. *Où mène-t-il ?* Une page du document (choisie dans la liste) ou un site web (`https://`, `mailto:`, `tel:`).
-2. *À quoi ressemble-t-il ?* Libellé (par défaut, le nom de la page), description, icône (70 icônes, recherche en
-   français), couleur de la charte.
-
-Un aperçu en direct montre le bouton final. Cliquer sur un bouton de l'aperçu du hub l'ouvre aussi pour modification.
-
-**Onglet Apparence** : chaque réglage se choisit sur une miniature du hub.
-
-| Réglage | Choix |
-|---|---|
-| Charte graphique | Métropole de Lyon, ou DSFR (Système de design de l'État : Bleu France, tuiles droites à liseré, police Marianne si elle est installée) |
-| Forme des boutons | tuiles, aplats, liste, pastilles |
-| Couleurs | Métropole (rouge alterné), institutionnel, rouge et bleu, multicolore |
-| En-tête | aucun, sobre, encadré, bandeau rouge ; titre, sous-titre et logo |
-| Fond | par défaut, couleur, image (adresse ou fichier importé, compressé automatiquement), avec un voile réglable |
-| Disposition | taille, alignement, colonnes |
-
-**Onglet Réglages**
-- Pied de page.
-- Numérotation des rubriques.
-- Bouton « Modifier » visible ou non.
-- Adresse du document.
-- Changement de modèle.
-- Copie ou import de la configuration (pour réutiliser un hub dans un autre document).
-
-**En lecture**
-- Les lecteurs seuls ne voient jamais le bouton « Modifier ».
-- Le hub suit le thème clair ou sombre de Grist et s'adapte au mobile.
+Un hub vide propose « Ajouter le premier bouton », ou de partir d'un modèle. Les lecteurs seuls ne voient jamais
+les outils d'édition ; le hub suit le thème clair ou sombre de Grist et s'adapte au mobile.
 
 ## Installation
 
