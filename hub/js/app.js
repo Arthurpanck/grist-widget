@@ -7,6 +7,9 @@ import { createApp, reactive, computed, ref, watch, Sortable, registerIconLibrar
 import * as C from './config.js';
 import * as G from './grist.js';
 
+export const APP_VERSION = '2.0.1';
+console.info(`Hub de navigation ${APP_VERSION}`);
+
 // Icônes Lucide pour tous les <wa-icon> (les icônes internes de Web Awesome restent les siennes).
 registerIconLibrary('default', {
   resolver: name => `${LUCIDE}/${name}.svg`,
@@ -306,6 +309,7 @@ const EditorPanel = {
       importImage, importText, importConfig, reset, exportJson, docBaseHint,
       openButton, labelOf, describeLink, linkOf, isIconName, colorOf: C.colorOf, flatIndex,
       backgroundColors: C.BACKGROUND_COLORS,
+      version: APP_VERSION,
     };
   },
 };
@@ -516,23 +520,6 @@ const App = {
   },
 };
 
-// Les gabarits sont dans index.html. Si la page hôte ne les contient pas (widget intégré ailleurs,
-// par exemple via le « Custom widget builder »), on les récupère à côté de ce script.
-if (!document.getElementById('tpl-app')) {
-  const html = await (await fetch(new URL('../index.html', import.meta.url))).text();
-  const page = new DOMParser().parseFromString(html, 'text/html');
-  page.querySelectorAll('template[id^="tpl-"]').forEach(t => document.body.appendChild(document.importNode(t, true)));
-}
-
-createApp(App)
-  .component('hub-view', HubView)
-  .component('template-gallery', TemplateGallery)
-  .component('choice-grid', ChoiceGrid)
-  .component('editor-panel', EditorPanel)
-  .component('button-dialog', ButtonDialog)
-  .directive('sortable', vSortable)
-  .mount('#hub-root');
-
 /* ================================================================== */
 /* Liaison avec Grist                                                  */
 /* ================================================================== */
@@ -562,6 +549,27 @@ if (G.available) {
   store.saved = C.fromTemplate('portail', C.SAMPLE_PAGES);
   store.loaded = true;
 }
+
+/* ================================================================== */
+/* Montage                                                             */
+/* ================================================================== */
+
+// Les gabarits sont dans index.html. Si la page hôte ne les contient pas (widget intégré ailleurs,
+// par exemple via le « Custom widget builder »), on les récupère à côté de ce script.
+if (!document.getElementById('tpl-app')) {
+  const html = await (await fetch(new URL('../index.html', import.meta.url))).text();
+  const page = new DOMParser().parseFromString(html, 'text/html');
+  page.querySelectorAll('template[id^="tpl-"]').forEach(t => document.body.appendChild(document.importNode(t, true)));
+}
+
+createApp(App)
+  .component('hub-view', HubView)
+  .component('template-gallery', TemplateGallery)
+  .component('choice-grid', ChoiceGrid)
+  .component('editor-panel', EditorPanel)
+  .component('button-dialog', ButtonDialog)
+  .directive('sortable', vSortable)
+  .mount('#hub-root');
 
 // Pour les tests automatisés.
 window.__hub = { store, C };
