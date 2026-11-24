@@ -12,7 +12,6 @@ import { BoxModel, LayoutModel, parseBox } from "app/client/components/Forms/Mod
 import * as style from "app/client/components/Forms/styles";
 import { reportError } from "app/client/models/errors";
 import { buildMenu } from "app/client/components/Forms/Menu";
-import { textInput } from "app/client/ui/inputs";
 import { primaryButton } from "app/client/ui2018/buttons";
 import { theme } from "app/client/ui2018/cssVars";
 import { Computed, Disposable, dom, Holder, MultiHolder, Observable, styled } from "grainjs";
@@ -182,9 +181,9 @@ export class HubView extends Disposable {
   }
 
   /**
-   * Panneau du bouton sélectionné : l'icône, et l'adresse pour un site web. La destination se
-   * choisit dans les menus (« + », ou clic droit « Changer la destination »), le texte et la
-   * description directement sur la tuile.
+   * Panneau du bouton sélectionné : son icône. La destination se choisit dans les menus (« + », ou
+   * clic droit « Changer la destination ») ; le texte, la description et l'adresse d'un site web se
+   * modifient directement sur la tuile.
    */
   private _buildButtonPanel(box: ButtonModel) {
     const p = (k: string) => box.prop(k);
@@ -195,12 +194,8 @@ export class HubView extends Disposable {
       dom.on("click", ev => ev.stopPropagation()),
       cssPanelTitle("Bouton"),
       cssHint(dom.text(use => destinationText(use(kind), use(p("page")), use(p("form")), use)),
-        dom("br"), "Clic droit sur le bouton pour changer de destination."),
-      dom.maybe(use => use(kind) === "url", () => [
-        cssLabel("Adresse du site"),
-        textInput(p("url"), { placeholder: "www.exemple.fr" }, dom.on("change", save), dom.cls("test-hub-url"),
-          (elem) => { if (!p("url").get()) { setTimeout(() => elem.focus(), 50); } }),
-      ]),
+        dom("br"), "Clic droit sur le bouton pour changer de destination.",
+        dom.maybe(use => use(kind) === "url", () => [dom("br"), "Cliquez sur l'adresse, sur la tuile, pour la modifier."])),
       cssLabel("Icône"),
       cssIconGrid(HUB_ICONS.map(ic => cssIconChoice(hubIcon(ic.id, ic.id),
         cssIconChoice.cls("-selected", use => (use(p("icon")) || DEFAULT_ICON[use(kind)]) === ic.id),

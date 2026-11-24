@@ -14,7 +14,7 @@ import { BoxModel } from "app/client/components/Forms/Model";
 import * as css from "app/client/components/Forms/styles";
 import { stopEvent } from "app/client/lib/domUtils";
 import { reportError } from "app/client/models/errors";
-import { textarea } from "app/client/ui/inputs";
+import { autoGrow } from "app/client/ui/forms";
 import { theme } from "app/client/ui2018/cssVars";
 import { not } from "app/common/gutil";
 import { Computed, dom, IDomArgs, Observable, styled } from "grainjs";
@@ -29,9 +29,11 @@ export class ButtonModel extends BoxModel {
   public edit = Observable.create(this, false);
   /** Description en édition. */
   public editDescription = Observable.create(this, false);
+  /** Adresse (bouton vers un site web) en édition. */
+  public editUrl = Observable.create(this, false);
 
   private _overlay = Computed.create(this, not(this.selected));
-  private _editing = Computed.create(this, use => use(this.edit) || use(this.editDescription));
+  private _editing = Computed.create(this, use => use(this.edit) || use(this.editDescription) || use(this.editUrl));
 
   constructor(box: FormLayoutNode, parent: BoxModel | null, view: any) {
     super(box, parent, view);
@@ -40,8 +42,12 @@ export class ButtonModel extends BoxModel {
       if (!now && then) {
         setTimeout(() => {
           if (this.isDisposed()) { return; }
-          this.edit.set(false); this.editDescription.set(false);
+          this.edit.set(false); this.editDescription.set(false); this.editUrl.set(false);
         });
+      }
+      // Bouton vers un site web sans adresse : sélectionné, il ouvre directement la saisie de l'adresse.
+      if (now && !then && this.prop("kind").get() === "url" && !this.prop("url").get()) {
+        setTimeout(() => { if (!this.isDisposed() && this.selected.get()) { this.editUrl.set(true); } }, 50);
       }
     }));
   }
@@ -70,34 +76,47 @@ export class ButtonModel extends BoxModel {
         const data = this.data(use);
         return buttonTile(data, "div", {
           label: this._text("label", this.edit, labelOf(data), cssTileLabel, "Texte du bouton"),
-          description: this._text("description", this.editDescription, data.description || "", cssTileDesc,
-            "Ajouter une description"),
+          description: [
+            this._text("description", this.editDescription, data.description || "", cssTileDesc,
+              "Ajouter une description"),
+            // Site web : l'adresse, sous le texte, se modifie de la même façon (éditeur seulement).
+            data.kind === "url" ?
+              this._text("url", this.editUrl, data.url || "", cssTileUrl, "Adresse du site (www.…)") : null,
+          ],
         });
       }),
     }, ...args);
   }
 
-  /** Texte modifiable sur place (même fonctionnement que le libellé d'une question de formulaire). */
-  private _text(key: "label" | "description", edit: Observable<boolean>, shown: string,
+  /**
+   * Texte modifiable sur place. Repris de Grist, Forms/Field.ts (Question.renderLabel) : même zone
+   * de texte (cssEditableLabel), mêmes commandes (saveControls : Entrée, Échap, clic ailleurs), même
+   * agrandissement automatique (autoGrow), même ouverture par un clic sur le texte du bloc
+   * sélectionné. La seule différence : on enregistre dans le bloc au lieu de la colonne de la table.
+   */
+  private _text(key: "label" | "description" | "url", edit: Observable<boolean>, shown: string,
                 look: typeof cssTileLabel, placeholder: string) {
     return dom.domComputed(edit, (editing) => {
       if (editing) {
         // Brouillon non libéré avec la zone de texte (comme Paragraph.ts) : à sa suppression, celle-ci
         // émet encore « change » et y écrit.
         const draft = Observable.create(null, shown);
-        return look(cssTextEdit(draft, { autoGrow: true, onInput: true },
+        return look(cssInlineEdit(css.cssEditableLabel(draft, { onInput: true },
           { placeholder, rows: "1" },
-          (elem) => { setTimeout(() => { elem.focus(); elem.select(); }, 10); },
           css.saveControls(edit, (ok) => {
             if (!ok || !edit.get() || this.isDisposed()) { return; }
             this.prop(key).set(draft.get().trim());
             this.save().catch(reportError);
           }),
+          autoGrow(draft),
           dom.on("contextmenu", stopEvent),
+          dom.style("resize", "none"),
+          css.cssEditableLabel.cls("-edit"),
+          (elem) => { setTimeout(() => { elem.focus(); elem.select(); }, 10); },
           dom.cls(`test-hub-${key}-editor`),
-        ));
+        )));
       }
-      // Description vide : on n'affiche son emplacement que sur le bouton sélectionné.
+      // Texte vide (description, adresse) : son emplacement n'apparaît que sur le bloc sélectionné.
       if (!shown) {
         return dom.maybe(this.selected, () => cssPlaceholder(placeholder, this._startEdit(edit),
           dom.cls(`test-hub-${key}`)));
@@ -111,7 +130,7 @@ export class ButtonModel extends BoxModel {
       dom.style("cursor", use => use(this.selected) ? "text" : ""),
       dom.on("click", (ev) => {
         if (this.selected.get() && !edit.get()) {
-          (edit === this.edit ? this.editDescription : this.edit).set(false);
+          [this.edit, this.editDescription, this.editUrl].forEach(e => e !== edit && e.set(false));
           edit.set(true);
           ev.stopPropagation();
         }
@@ -128,21 +147,14 @@ export function Button(kind: "page" | "form" | "url" = "page", target: number | 
   } as any;
 }
 
-const cssTextEdit = styled(textarea, `
-  display: block;
-  width: 100%;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  outline: none;
-  resize: none;
-  overflow: hidden;
-  font: inherit;
-  color: inherit;
-  line-height: inherit;
-  background: ${theme.hover};
-  border-radius: 2px;
-  box-shadow: 0 0 0 3px ${theme.hover};
+// La zone de texte de Grist garde ici la police de la tuile (et non celle des libellés de questions).
+const cssInlineEdit = styled("div", `
+  & > textarea { font: inherit; color: inherit; line-height: inherit; min-height: 0; overflow: hidden; }
+`);
+const cssTileUrl = styled("div", `
+  font-size: 12px;
+  color: ${theme.lightText};
+  overflow-wrap: anywhere;
 `);
 const cssPlaceholder = styled("div", `
   font-size: 13px;

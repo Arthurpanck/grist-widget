@@ -26,11 +26,13 @@ affichés ; « Vers un site web » ajoute un lien externe.
    - le clic droit ouvre le menu : changer la destination d'un bouton, copier, couper, coller,
      supprimer ;
    - glissez les blocs pour les déplacer.
-4. Un bouton sélectionné ouvre un panneau à droite : son icône (24 icônes Lucide choisies pour un
-   hub : accueil, page, tableau, statistiques, agenda, équipe, formulaire, courriel, téléphone, lieu,
-   site web, aide…) et, pour un site web, son adresse. Tous les boutons ont le vert du bouton
-   « Envoyer » des formulaires de Grist.
-5. **Terminé** affiche le hub tel que le voient les lecteurs. Les paragraphes, rubriques et colonnes
+4. Un bouton vers un site web affiche son adresse sous son texte, dans l'éditeur seulement ; elle se
+   modifie au clic, comme le texte. Un nouveau bouton de ce type ouvre directement sa saisie.
+5. Un bouton sélectionné ouvre un panneau à droite pour choisir son icône (24 icônes Lucide choisies
+   pour un hub : accueil, page, tableau, statistiques, agenda, équipe, formulaire, courriel,
+   téléphone, lieu, site web, aide…). Tous les boutons ont le vert du bouton « Envoyer » des
+   formulaires de Grist.
+6. **Terminé** affiche le hub tel que le voient les lecteurs. Les paragraphes, rubriques et colonnes
    passent par le rendu des formulaires publiés de Grist (`FormRenderer`).
 
 La mise en page est enregistrée dans les options du widget (clé `layout`), au même format JSON que la
