@@ -310,6 +310,12 @@ body { background: var(--wa-color-surface-lowered); }
 }
 .swatch[aria-checked='true'] { box-shadow: 0 0 0 2px var(--wa-color-text-normal); }
 .swatch:focus-visible { outline: var(--wa-focus-ring); outline-offset: var(--wa-focus-ring-offset); }
+.swatch--custom { position: relative; display: grid; place-items: center; color: var(--wa-color-text-quiet);
+  background: conic-gradient(#EF8C8C, #F9D45C, #88BF4D, #98D9D9, #509EE3, #A989C5, #EF8C8C); }
+.swatch--custom wa-icon { padding: 3px; border-radius: 50%; background: var(--wa-color-surface-raised); font-size: 0.8rem; }
+.swatch--custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.swatch--set { box-shadow: 0 0 0 2px var(--wa-color-text-normal); }
+.swatch--custom:focus-within { outline: var(--wa-focus-ring); outline-offset: var(--wa-focus-ring-offset); }
 
 /* 4. Édition sur place --------------------------------------------- */
 
@@ -558,3 +564,4 @@ body { background: var(--wa-color-surface-lowered); }
   .stage--panel { padding-right: 0; }
   .panel { width: 100%; }
 }
+.card__hint { margin: 0; }

@@ -264,7 +264,7 @@
               </button>
             </div>
             <template v-if="moreIcons">
-              <wa-input size="s" placeholder="Rechercher : budget, carte, équipe…" with-clear :value.prop="iconQuery" @input="iconQuery = $event.target.value">
+              <wa-input size="s" placeholder="Rechercher (français ou anglais) : budget, carte, chart…" with-clear :value.prop="iconQuery" @input="iconQuery = $event.target.value">
                 <wa-icon slot="start" name="search"></wa-icon>
               </wa-input>
               <div class="icon-grid" role="radiogroup" aria-label="Toutes les icônes">
@@ -272,6 +272,8 @@
                   :aria-checked="String(b.icon === i.name)" @click="b.icon = i.name"><wa-icon :name="i.name"></wa-icon></button>
                 <button type="button" class="icon-choice icon-choice--none" role="radio" :aria-checked="String(!b.icon)" @click="b.icon = ''">Aucune</button>
               </div>
+              <p v-if="iconQuery.trim() && !icons.length" class="wa-caption-s wa-color-text-quiet card__hint">
+                Aucune icône trouvée. Toute la bibliothèque se cherche aussi en anglais : trash, chart, school…</p>
             </template>
           </div>
 
@@ -280,6 +282,12 @@
             <div class="card__swatches" role="radiogroup" aria-label="Couleur">
               <button v-for="[id, label] in colors" :key="id" type="button" class="swatch" role="radio" :title="label" :aria-label="label"
                 :aria-checked="String(b.color === id)" :style="{ background: id === 'auto' ? autoGradient : chartColors[id].bg }" @click="b.color = id"></button>
+              <label class="swatch swatch--custom" :class="{ 'swatch--set': isHex(b.color) }" title="Couleur personnalisée"
+                :style="isHex(b.color) ? { background: b.color } : null">
+                <wa-icon v-if="!isHex(b.color)" name="pipette"></wa-icon>
+                <input type="color" aria-label="Couleur personnalisée" :value="isHex(b.color) ? b.color : '#2A3158'"
+                  @input="b.color = $event.target.value">
+              </label>
             </div>
           </div>
 

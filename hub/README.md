@@ -36,7 +36,10 @@ voient aucun bouton d'édition.
    - le champ reste ouvert pour le bouton suivant ; **Échap** le referme.
 2. **Modifier un bouton.** Un clic sur un bouton ouvre sa fiche, juste à côté :
    - nom, description, destination (« Changer »), icône ;
-   - couleur : celle de la charte Métropole, ou une des 8 pastilles de la palette Metabase.
+   - couleur : celle de la charte Métropole, une des 8 pastilles de la palette Metabase, ou une couleur
+     personnalisée (pipette) ; le texte passe en blanc ou en foncé selon la couleur, pour rester lisible ;
+   - icône : 6 suggestions, puis « Plus d'icônes » qui cherche dans toute la bibliothèque Lucide (plus de
+     2 000 icônes), en français pour les plus courantes, en anglais pour toutes.
 
    La **petite croix** en haut à droite d'un bouton le supprime.
 3. **Composer la page.** En bas du hub, « Ajouter : **Titre** · **Sous-titre** · **Rubrique de boutons** ».
@@ -80,7 +83,7 @@ Les configurations créées avec la première version du hub sont reprises autom
 |---|---|
 | [Web Awesome](https://webawesome.com) 3.14 (MIT) | Composants : boutons, champs, onglets, dialogues, curseurs, notifications, panneau redimensionnable ; thèmes et utilitaires de mise en page. |
 | [Vue](https://vuejs.org) 3.5 (MIT) | Gabarits déclaratifs et état réactif. |
-| [Lucide](https://lucide.dev) 1.70 (ISC) | Icônes. |
+| [Lucide](https://lucide.dev) 1.70 (ISC) | Icônes : toute la bibliothèque, en une planche (`vendor/lucide/sprite.svg`). |
 | [SortableJS](https://sortablejs.github.io/Sortable/) 1.15 (MIT) | Glisser-déposer. |
 
 | Fichier | Contenu |
