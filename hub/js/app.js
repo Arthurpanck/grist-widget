@@ -9,18 +9,31 @@
  *  2. modifier — un clic sur un bouton ouvre sa fiche à côté de lui ; on le glisse pour le déplacer ;
  *  3. afficher — le panneau « Affichage » règle forme, couleurs, en-tête et fond.
  */
-import { createApp, reactive, computed, ref, watch, onMounted, nextTick, Sortable, registerIconLibrary, LUCIDE } from './libs.js';
+import { createApp, reactive, computed, ref, watch, onMounted, nextTick, Sortable, registerIconLibrary, LUCIDE_SPRITE, LUCIDE_TAGS } from './libs.js';
 import * as C from './config.js';
 import * as G from './grist.js';
 
-export const APP_VERSION = '3.3.0';
+export const APP_VERSION = '3.4.0';
 console.info(`Hub de navigation ${APP_VERSION}`);
 
-// Icônes Lucide pour tous les <wa-icon> (les icônes internes de Web Awesome restent les siennes).
+// Icônes Lucide pour tous les <wa-icon>, lues dans la planche complète de la bibliothèque
+// (les icônes internes de Web Awesome restent les siennes).
+const STROKE = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
 registerIconLibrary('default', {
-  resolver: name => `${LUCIDE}/${name}.svg`,
-  mutator: svg => svg.querySelectorAll('*').forEach(el => el.setAttribute('fill', 'none')),
+  resolver: name => `${LUCIDE_SPRITE}#${name}`,
+  spriteSheet: true,
+  mutator: svg => Object.entries(STROKE).forEach(([k, v]) => svg.setAttribute(k, v)),
 });
+
+// Toute la bibliothèque, pour la recherche d'icônes : chargée au premier besoin.
+const allIcons = ref(null);
+let allIconsLoading = null;
+function loadAllIcons() {
+  allIconsLoading = allIconsLoading || fetch(LUCIDE_TAGS).then(r => r.json())
+    .then(tags => { allIcons.value = Object.entries(tags).map(([name, words]) => ({ name, label: name, keywords: words })); })
+    .catch(() => { allIcons.value = []; });
+  return allIconsLoading;
+}
 
 /* ================================================================== */
 /* État partagé                                                        */
@@ -345,7 +358,18 @@ const ButtonCard = {
       const names = [b.value.icon, C.guessIcon(labelOf(b.value)), 'file-text', 'table-2', 'layout-dashboard', 'users', 'calendar-days', 'map', 'book-open', 'globe'];
       return [...new Set(names.filter(isIconName))].slice(0, 6).map(n => C.ICONS.find(i => i.name === n) || { name: n, label: n });
     });
-    const icons = computed(() => C.searchIcons(iconQuery.value));
+    // Recherche : d'abord le catalogue en français, puis toute la bibliothèque Lucide (noms et mots-clés anglais).
+    const icons = computed(() => {
+      const found = C.searchIcons(iconQuery.value);
+      const q = normalizeText(iconQuery.value);
+      if (!q || !allIcons.value) { return found; }
+      const known = new Set(found.map(i => i.name));
+      const more = allIcons.value.filter(i => !known.has(i.name) && (i.name.includes(q) || i.keywords.includes(q)));
+      more.sort((a, b) => b.name.includes(q) - a.name.includes(q));
+      return found.concat(more).slice(0, 120);
+    });
+    watch(iconQuery, q => { if (q.trim()) { loadAllIcons(); } });
+    const isHex = value => /^#[0-9a-f]{6}$/i.test(value || '');
 
     function setDest(dest) {
       const before = iconFor(b.value);
@@ -372,7 +396,7 @@ const ButtonCard = {
     });
 
     return {
-      b, changing, moreIcons, iconQuery, iconChoices, icons, setDest, remove, onHide, colors, autoGradient, chartColors, KINDS,
+      b, changing, moreIcons, iconQuery, iconChoices, icons, setDest, remove, onHide, colors, autoGradient, chartColors, KINDS, isHex,
       describe: computed(() => (b.value ? describeLink(b.value) : '')),
       placeholder: computed(() => (b.value ? autoLabel(b.value) || 'Texte du bouton' : '')),
     };

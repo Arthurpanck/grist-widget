@@ -90,9 +90,12 @@ export function paletteFor(charte, palette) {
 export const charteOf = cfg => CHARTES[cfg && cfg.charte] || CHARTES.metropole;
 
 /** Couleur d'un bouton : la sienne, ou celle de la palette selon son rang (« Automatique »). */
+const HEX = /^#[0-9a-f]{6}$/i;
+
 export function colorOf(button, index, cfg) {
   const ch = charteOf(cfg);
   if (button.color && ch.colors[button.color]) { return ch.colors[button.color]; }
+  if (HEX.test(button.color)) { return { label: 'Personnalisée', bg: button.color, fg: isDark(button.color) ? '#FFFFFF' : '#1E2340' }; }
   const cycle = (ch.palettes[cfg.look.palette] || ch.palettes[ch.palette]).cycle;
   return ch.colors[cycle[index % cycle.length]];
 }
@@ -299,7 +302,7 @@ function normalizeButton(b, colors) {
     label: str(b.label),
     description: str(b.description),
     icon: V1_ICONS[icon] || icon,
-    color: colors[b.color] ? b.color : 'auto',
+    color: colors[b.color] || HEX.test(b.color) ? b.color : 'auto',
     kind: pick(b.kind, ['page', 'form', 'url'], 'page'),
     page: Number(b.page) > 0 ? Number(b.page) : null,
     form: Number(b.form) > 0 ? Number(b.form) : null,
