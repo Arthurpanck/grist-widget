@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copie, sans modification (hormis un libellé traduit, voir plus bas), le code de grist-core que le
+# Copie, sans modification (hormis les retouches de tools/grist.patch), le code de grist-core que le
 # hub réutilise : l'éditeur de formulaires (modèle de blocs, glisser-déposer, menus, paragraphes
 # Markdown, sections, colonnes, styles), le rendu des formulaires publiés, et tout ce qu'ils
 # importent (commandes, traductions, infobulles, thème, menus…), ainsi que les traductions de Grist.
@@ -58,9 +58,10 @@ rm -rf "$OUT" && mkdir -p "$OUT"
 join() { local IFS=,; echo "$*"; }
 COUNT=$(node "$HERE/tools/copy-closure.mjs" "$SRC" "$OUT" "$(join "${ENTRIES[@]}")" "$(join "${STOPS[@]}")")
 
-# Seule retouche : un libellé écrit en dur en anglais dans Columns.ts (« Column 2 »), traduit ici.
-sed -i 's/dom("span", `Column `,/dom("span", `Colonne `,/' "$OUT/app/client/components/Forms/Columns.ts"
-grep -q 'Colonne ' "$OUT/app/client/components/Forms/Columns.ts" || { echo "Retouche de Columns.ts impossible" >&2; exit 1; }
+# Retouches de tools/grist.patch, comme Grist Labs les ferait dans grist-core : le type de bloc
+# « Button » et son rendu en lecture (FormRenderer.ts), et un libellé écrit en dur en anglais dans
+# Columns.ts (« Column 2 ») traduit. Si grist-core a changé à ces endroits, patch échoue et s'arrête.
+patch --quiet --forward --strip=1 --directory="$OUT" < "$HERE/tools/grist.patch"
 
 mkdir -p "$HERE/public" "$HERE/locales"
 cp "$SRC/static/icons/icons.css" "$HERE/public/grist-icons.css"
@@ -89,5 +90,5 @@ node -e '
   fs.writeFileSync(process.argv[2], JSON.stringify(pkg, null, 2) + "\n");
 ' "$SRC/package.json" "$HERE/package.json" "$OUT"
 
-echo "grist-core@${GRIST_CORE_COMMIT:0:8} : $COUNT fichiers copiés dans src/grist/ ($(find "$OUT" -name '*.[tj]s' -exec cat {} + | wc -l) lignes), un libellé traduit."
+echo "grist-core@${GRIST_CORE_COMMIT:0:8} : $COUNT fichiers copiés dans src/grist/ ($(find "$OUT" -name '*.[tj]s' -exec cat {} + | wc -l) lignes), retouches de tools/grist.patch appliquées."
 echo "Dépendances alignées sur grist-core dans package.json : lancez npm install."

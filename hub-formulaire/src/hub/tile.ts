@@ -1,27 +1,60 @@
 /**
- * Tuile d'un bouton, en « bloc icône » : bandeau au vert du bouton Envoyer des formulaires, avec
- * l'icône du type de destination, texte en dessous. Même rendu, et même taille, dans l'éditeur et en
- * lecture. Variables de thème de Grist.
+ * Tuile d'un bouton : bandeau au vert du bouton « Envoyer » des formulaires, avec l'icône de la
+ * destination, et texte en dessous. Même rendu, et même taille, dans l'éditeur (Button.ts) et en
+ * lecture (ButtonRenderer, dans FormRenderer.ts).
  */
+import type { FormLayoutNode } from "app/client/components/FormRenderer";
+import type { HubContext } from "app/client/hub/HubContext";
 import { theme, vars } from "app/client/ui2018/cssVars";
-import { dom, DomContents, DomElementArg, styled } from "grainjs";
-import { ButtonData, ICONS, labelOf } from "./context";
+import { dom, DomContents, DomElementArg, makeTestId, styled } from "grainjs";
+
+const testId = makeTestId("test-hub-");
+
+/** Icône de la tuile, selon la destination. */
+const ICONS = { page: "📄", form: "📝", url: "🌐" };
 
 /** Texte de la tuile : par défaut, le libellé et la description ; l'éditeur fournit les siens. */
-export interface TileText { label?: DomContents; description?: DomContents; }
+export interface TileText {
+  label: DomContents;
+  description: DomContents;
+}
 
-export function buttonTile(b: ButtonData, tag: "a" | "div", text: TileText | null, ...args: DomElementArg[]) {
-  const make = tag === "a" ? cssTileLink : cssTile;
-  return make(
-    dom.cls("hub-tile"),
-    // Bandeau vert avec l'icône du type de destination.
-    cssTileIcon(ICONS[b.kind || "page"], dom.cls("test-hub-icon")),
-    cssTileText(
-      text?.label ?? cssTileLabel(labelOf(b)),
-      text?.description ?? (b.description ? cssTileDesc(b.description) : null),
-    ),
-    ...args,
+/**
+ * Tuile de l'éditeur.
+ */
+export function buttonTile(button: FormLayoutNode, text: TileText, ...args: DomElementArg[]) {
+  return cssTile(buildTileContent(button, text), ...args);
+}
+
+/**
+ * Tuile en lecture : un lien vers la destination, grisé tant que le bouton n'en a pas.
+ */
+export function buttonLink(button: FormLayoutNode, hub: HubContext) {
+  const text = {
+    label: cssTileLabel(hub.labelOf(button)),
+    description: button.description ? cssTileDesc(button.description) : null,
+  };
+  const link = hub.linkOf(button);
+  if (!link) {
+    return cssTile(
+      buildTileContent(button, text),
+      dom.style("opacity", "0.55"),
+      dom.attr("title", "Destination à choisir"),
+    );
+  }
+  return cssTileLink(
+    buildTileContent(button, text),
+    { href: link.href, target: link.target },
+    link.target === "_blank" ? { rel: "noopener" } : null,
   );
+}
+
+function buildTileContent(button: FormLayoutNode, text: TileText) {
+  return [
+    dom.cls("hub-tile"),
+    cssTileIcon(ICONS[button.kind || "page"], testId("icon")),
+    cssTileText(text.label, text.description),
+  ];
 }
 
 const tileCss = `
@@ -43,9 +76,14 @@ const tileCss = `
     text-decoration: none;
     color: ${theme.text};
   }
-  a&:focus-visible { outline: 2px solid ${vars.primaryBg}; outline-offset: 2px; }
+  a&:focus-visible {
+    outline: 2px solid ${vars.primaryBg};
+    outline-offset: 2px;
+  }
 `;
+
 const cssTile = styled("div", tileCss);
+
 const cssTileLink = styled("a", tileCss);
 
 const cssTileIcon = styled("div", `
@@ -57,6 +95,7 @@ const cssTileIcon = styled("div", `
   font-size: 30px;
   line-height: 1;
 `);
+
 const cssTileText = styled("div", `
   flex: 1;
   display: flex;
@@ -65,6 +104,7 @@ const cssTileText = styled("div", `
   gap: 4px;
   padding: 14px 16px;
 `);
+
 export const cssTileLabel = styled("div", `
   font-weight: 600;
   font-size: 15px;
@@ -72,6 +112,7 @@ export const cssTileLabel = styled("div", `
   overflow-wrap: break-word;
   hyphens: auto;
 `);
+
 export const cssTileDesc = styled("div", `
   font-size: 13px;
   line-height: 1.35;

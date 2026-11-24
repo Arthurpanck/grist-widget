@@ -15,7 +15,7 @@ import { v4 as uuidv4 } from "uuid";
 export * from "app/client/components/Forms/Paragraph";
 export * from "app/client/components/Forms/Section";
 export * from "app/client/components/Forms/Columns";
-export * from "../../../../../hub/ButtonModel";
+export * from "app/client/hub/Button";
 
 export function defaultElement(type: FormLayoutNodeType): FormLayoutNode {
   switch (type) {

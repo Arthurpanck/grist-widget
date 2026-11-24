@@ -1,1 +1,42 @@
-{ "compilerOptions": { "target": "es2020", "experimentalDecorators": true, "emitDecoratorMetadata": true, "esModuleInterop": true, "allowSyntheticDefaultImports": true, "useDefineForClassFields": false } }
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "lib": [
+      "es2020",
+      "dom",
+      "dom.iterable"
+    ],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "useDefineForClassFields": false,
+    "strict": true,
+    "strictPropertyInitialization": false,
+    "useUnknownInCatchVariables": false,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "types": [
+      "node"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "app/client/hub/*": [
+        "src/hub/*"
+      ],
+      "app/*": [
+        "src/shims/app/*",
+        "src/grist/app/*"
+      ]
+    }
+  },
+  "files": [
+    "src/hub/main.ts",
+    "src/types/grist.d.ts"
+  ]
+}

@@ -1,5 +1,6 @@
-// Construit dist/hub.js : les imports « app/… » se résolvent d'abord dans src/shims (les 4 fichiers
-// liés au document Grist), puis dans src/grist (code de grist-core copié sans modification).
+// Construit dist/hub.js. Les imports « app/… » se résolvent comme dans grist-core : app/client/hub/…
+// dans src/hub (le code du hub), le reste d'abord dans src/shims (les fichiers remplacés, liés au document
+// Grist), puis dans src/grist (code de grist-core copié, avec les retouches de tools/grist.patch).
 //
 // Le code de Grist charge certaines parties à la demande, par des imports dynamiques regroupés dans
 // app/client/lib/imports.js : pages d'administration et de facturation, document complet, éditeur
@@ -12,6 +13,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ROOTS = [join(ROOT, "src/shims"), join(ROOT, "src/grist")];
+const HUB_PREFIX = "app/client/hub/";
 const ON_DEMAND = /^(ace-builds|marked-katex-extension|katex|plotly\.js-basic-dist|@toast-ui\/calendar|moment-timezone)(\/|$)/;
 const emptied = new Set();
 
@@ -19,6 +21,9 @@ const gristPaths = {
   name: "grist-paths",
   setup(b) {
     b.onResolve({ filter: /^app\// }, (args) => {
+      if (args.path.startsWith(HUB_PREFIX)) {
+        return { path: join(ROOT, "src/hub", args.path.slice(HUB_PREFIX.length) + ".ts") };
+      }
       for (const root of ROOTS) {
         for (const ext of [".ts", ".js"]) {
           const file = join(root, args.path + ext);

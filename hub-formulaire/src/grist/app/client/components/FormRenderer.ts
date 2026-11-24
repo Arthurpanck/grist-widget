@@ -10,6 +10,8 @@ import { confirmModal } from "app/client/ui2018/modals";
 import { toggleSwitch } from "app/client/ui2018/toggleSwitch";
 import { isAffirmative, isNumber } from "app/common/gutil";
 import { CellValue } from "app/plugin/GristData";
+import type { HubContext } from "app/client/hub/HubContext";
+import { buttonLink } from "app/client/hub/tile";
 
 import {
   Disposable,
@@ -50,6 +52,13 @@ export interface FormLayoutNode {
   text?: string;
   // Used by Paragraph.
   alignment?: string;
+  // Used by Button (hub).
+  label?: string;
+  description?: string;
+  kind?: "page" | "form" | "url";
+  page?: number | null;
+  form?: number | null;
+  url?: string;
 }
 
 export type FormLayoutNodeType =
@@ -62,7 +71,8 @@ export type FormLayoutNodeType =
   "Field" |
   "Label" |
   "Separator" |
-  "Header";
+  "Header" |
+  "Button";
 
 /**
  * Context used by FormRenderer to build each node.
@@ -76,6 +86,8 @@ export interface FormRendererContext {
   disabled: Observable<boolean>;
   /** Error to show above the Submit node. */
   error: Observable<string | null>;
+  /** Pages, forms and address of the document, used by the Button node (hub). */
+  hub?: HubContext;
 }
 
 /**
@@ -149,6 +161,12 @@ export abstract class FormRenderer extends Disposable {
 class LabelRenderer extends FormRenderer {
   public render() {
     return css.label(this.layoutNode.text ?? "");
+  }
+}
+
+class ButtonRenderer extends FormRenderer {
+  public render() {
+    return buttonLink(this.layoutNode, this.context.hub!);
   }
 }
 
@@ -1048,6 +1066,7 @@ const FormRenderers = {
   Layout: LayoutRenderer,
   Field: FieldRenderer,
   Label: LabelRenderer,
+  Button: ButtonRenderer,
   // Aliases for Paragraph.
   Separator: ParagraphRenderer,
   Header: ParagraphRenderer,

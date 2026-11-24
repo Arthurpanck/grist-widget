@@ -1,0 +1,78 @@
+diff -ru a/app/client/components/FormRenderer.ts b/app/client/components/FormRenderer.ts
+--- a/app/client/components/FormRenderer.ts
++++ b/app/client/components/FormRenderer.ts
+@@ -10,6 +10,8 @@
+ import { toggleSwitch } from "app/client/ui2018/toggleSwitch";
+ import { isAffirmative, isNumber } from "app/common/gutil";
+ import { CellValue } from "app/plugin/GristData";
++import type { HubContext } from "app/client/hub/HubContext";
++import { buttonLink } from "app/client/hub/tile";
+ 
+ import {
+   Disposable,
+@@ -50,6 +52,13 @@
+   text?: string;
+   // Used by Paragraph.
+   alignment?: string;
++  // Used by Button (hub).
++  label?: string;
++  description?: string;
++  kind?: "page" | "form" | "url";
++  page?: number | null;
++  form?: number | null;
++  url?: string;
+ }
+ 
+ export type FormLayoutNodeType =
+@@ -62,7 +71,8 @@
+   "Field" |
+   "Label" |
+   "Separator" |
+-  "Header";
++  "Header" |
++  "Button";
+ 
+ /**
+  * Context used by FormRenderer to build each node.
+@@ -76,6 +86,8 @@
+   disabled: Observable<boolean>;
+   /** Error to show above the Submit node. */
+   error: Observable<string | null>;
++  /** Pages, forms and address of the document, used by the Button node (hub). */
++  hub?: HubContext;
+ }
+ 
+ /**
+@@ -152,6 +164,12 @@
+   }
+ }
+ 
++class ButtonRenderer extends FormRenderer {
++  public render() {
++    return buttonLink(this.layoutNode, this.context.hub!);
++  }
++}
++
+ class ParagraphRenderer extends FormRenderer {
+   public render() {
+     return css.paragraph(
+@@ -1048,6 +1066,7 @@
+   Layout: LayoutRenderer,
+   Field: FieldRenderer,
+   Label: LabelRenderer,
++  Button: ButtonRenderer,
+   // Aliases for Paragraph.
+   Separator: ParagraphRenderer,
+   Header: ParagraphRenderer,
+diff -ru a/app/client/components/Forms/Columns.ts b/app/client/components/Forms/Columns.ts
+--- a/app/client/components/Forms/Columns.ts
++++ b/app/client/components/Forms/Columns.ts
+@@ -218,7 +218,7 @@
+       dom.maybe(boxModelAt, child => child.render()),
+       // If not, render a placeholder.
+       dom.maybe(not(boxModelAt), () =>
+-        dom("span", `Column `, dom.text(use => String(use(liveIndex) + 1))),
++        dom("span", `Colonne `, dom.text(use => String(use(liveIndex) + 1))),
+       ),
+       ...args,
+     );

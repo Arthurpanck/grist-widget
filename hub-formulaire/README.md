@@ -41,11 +41,13 @@ cliquez ensuite sur **Enregistrer** dans le menu du widget.
 
 | | Fichiers | Lignes |
 |---|---|---|
-| **Copié de grist-core sans modification** (`src/grist/`, Apache-2.0) : l'éditeur de formulaires (`Forms/Model`, `Editor`, `Paragraph`, `Section`, `Columns`, `styles`), le rendu des formulaires publiés (`FormRenderer`), et tout ce qu'ils importent : commandes et raccourcis, traductions (i18next), infobulles, menus, icônes, boutons, thème, adresses… | 131 | ≈ 34 800 |
+| **Copié de grist-core** (`src/grist/`, Apache-2.0) : l'éditeur de formulaires (`Forms/Model`, `Editor`, `Paragraph`, `Section`, `Columns`, `styles`), le rendu des formulaires publiés (`FormRenderer`), et tout ce qu'ils importent : commandes et raccourcis, traductions (i18next), infobulles, menus, icônes, boutons, thème, adresses… | 131 | ≈ 34 800 |
+| **Retouches de ces fichiers** (`tools/grist.patch`), comme Grist Labs les ferait : le type de bloc « Button » et son rendu en lecture dans `FormRenderer.ts`, le libellé « Colonne » dans `Columns.ts` | 2 | 22 modifiées |
 | **Traductions et icônes de Grist** (`locales/`, `public/grist-icons.css`) | 3 | — |
-| **Remplacés**, car liés au document Grist ouvert : `Forms/FormView` (sert seulement de type) et `Forms/Field` (une question = une colonne de table) | 2 | 4 |
-| **Adapté de grist-core** : `Forms/Menu.ts` (« Nouveau bouton » et ses sous-menus au lieu de « Nouvelle question ») et `Forms/elements.ts` (liste des blocs) | 2 | ≈ 145 |
-| **Propre au hub** (`src/hub/`) : bloc Bouton, vue d'édition (reprend `FormView`), rendu des boutons en lecture, démarrage et liaison avec Grist | 6 | ≈ 600 |
+| **Remplacés**, car liés à l'application ou au document Grist : `Forms/FormView` et `ui/App` (servent seulement de types), `Forms/Field` (une question = une colonne de table) | 3 | 23 |
+| **Adapté de grist-core** : `Forms/Menu.ts` (« Nouveau bouton » et ses sous-menus au lieu de « Nouvelle question ») et `Forms/elements.ts` (liste des blocs) | 2 | ≈ 150 |
+| **Propre au hub** (`src/hub/`) : bloc Bouton (`Button.ts`), vue d'édition (`HubView.ts`, reprend `FormView`), tuile (`tile.ts`), hub en lecture (`HubPage.ts`), pages et formulaires du document (`HubContext.ts`), démarrage et liaison avec Grist (`main.ts`) | 6 | ≈ 875 |
+| **Déclarations de types** (`src/types/grist.d.ts`) pour les fichiers de Grist non copiés | 1 | 18 |
 
 Le démarrage (`src/hub/main.ts`) fait ce que fait l'application Grist (`app/client/ui/App.ts`) :
 - `window.gristConfig` ;
@@ -59,19 +61,26 @@ Le code de Grist charge certaines parties à la demande, par des imports dynamiq
 graphiques, calendrier… Le hub n'emprunte jamais ces chemins. `tools/build.mjs` les remplace donc
 par des modules vides au lieu de les embarquer, et en affiche la liste (22) à chaque construction.
 
-Les fichiers copiés ne sont pas modifiés, à une exception près. `tools/sync-grist.sh` traduit le
-libellé « Column » (écrit en dur en anglais dans `Columns.ts`) en « Colonne ». Il copie les points
-d'entrée et tout ce qu'ils importent, puis aligne les versions des dépendances de `package.json` sur
-celles de grist-core. Pour reprendre une version plus récente de Grist, changez `GRIST_CORE_COMMIT`
+`tools/sync-grist.sh` copie les points d'entrée et tout ce qu'ils importent, puis applique les
+retouches de `tools/grist.patch`. Si grist-core a changé à ces endroits, la copie s'arrête sur une
+erreur au lieu de produire un hub cassé. Il aligne enfin les versions des dépendances de
+`package.json` sur celles de grist-core.
+
+Le code du hub s'écrit comme celui des formulaires de Grist : imports `app/client/hub/…` (résolus vers
+`src/hub/` par `tools/build.mjs` et `tsconfig.json`), blocs construits sur `BoxModel` et
+`buildEditor`, pages et formulaires transmis par la vue (`HubView.hub`) et par le contexte du rendu
+(`FormRendererContext.hub`). `npm run check` vérifie les types de tout le code, avec les options de
+TypeScript de Grist. Pour reprendre une version plus récente de Grist, changez `GRIST_CORE_COMMIT`
 dans `tools/sync-grist.sh`, puis lancez :
 
 ```bash
 npm run sync      # copie le code de grist-core et aligne les dépendances
 npm install
-npm run build     # produit dist/hub.js (esbuild, mêmes options TypeScript que Grist)
+npm run check     # vérifie les types (tsc, options de Grist)
+npm run build     # produit dist/hub.js (esbuild)
 ```
 
-`dist/hub.js` (≈ 645 Ko) est versionné pour que la page puisse être servie telle quelle.
+`dist/hub.js` (≈ 650 Ko) est versionné pour que la page puisse être servie telle quelle.
 
 ## Limites du prototype
 
@@ -84,5 +93,6 @@ npm run build     # produit dist/hub.js (esbuild, mêmes options TypeScript que 
 
 Les fichiers de `src/grist/` viennent de [grist-core](https://github.com/gristlabs/grist-core)
 (Grist Labs, licence Apache-2.0, texte dans `src/grist/LICENSE.txt`), au commit indiqué dans
-`src/grist/COMMIT`. `src/shims/app/client/components/Forms/Menu.ts`, `elements.ts` et
-`src/hub/HubView.ts` en sont adaptés et le signalent en tête de fichier.
+`src/grist/COMMIT`, avec les retouches de `tools/grist.patch`.
+`src/shims/app/client/components/Forms/Menu.ts`, `elements.ts` et `src/hub/HubView.ts` en sont
+adaptés et le signalent en tête de fichier.

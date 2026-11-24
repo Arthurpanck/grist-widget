@@ -1,59 +1,200 @@
 /**
- * Point d'entrée : thème et styles de base de Grist, liaison avec Grist (options du widget, pages,
- * formulaires), bascule entre la lecture et l'édition.
+ * Point d'entrée. Prépare ce que prépare l'application Grist (app/client/ui/App.ts) : configuration,
+ * styles et thème, commandes, traductions. Puis HubApp affiche le hub, en lecture ou en édition, et
+ * le relie à Grist : sa mise en page est enregistrée dans les options du widget.
  */
+import * as commands from "app/client/components/commands";
 import { FormLayoutNode } from "app/client/components/FormRenderer";
 import { Columns, Placeholder } from "app/client/components/Forms/Columns";
 import { Paragraph } from "app/client/components/Forms/Paragraph";
-import { attachCssRootVars } from "app/client/ui2018/cssVars";
+import { HubContext } from "app/client/hub/HubContext";
+import { buildHubPage } from "app/client/hub/HubPage";
+import { HubView } from "app/client/hub/HubView";
+import { getOrCreateStyleElement } from "app/client/lib/getOrCreateStyleElement";
 import { setupLocale } from "app/client/lib/localization";
-import * as gristCommands from "app/client/components/commands";
+import type { App } from "app/client/ui/App";
+import { attachCssRootVars } from "app/client/ui2018/cssVars";
 import { convertThemeKeysToCssVars } from "app/common/ThemePrefs";
 import { GristLight } from "app/common/themes/GristLight";
-import { getOrCreateStyleElement } from "app/client/lib/getOrCreateStyleElement";
-import { dom, Observable } from "grainjs";
+
+import { Disposable, dom, Observable } from "grainjs";
 import { v4 as uuidv4 } from "uuid";
-import { hubContext } from "./context";
-import { HubView } from "./HubView";
-import { buildView } from "./view";
 
 declare const grist: any;
+
+/** Clé des options du widget où est enregistrée la mise en page. */
+const OPTION_KEY = "layout";
+
 (window as any).gristConfig = { supportedLngs: ["fr", "en"], namespaces: ["client"], userLocale: "fr" };
-export const VERSION = "0.1.0";
-console.info(`Hub (éditeur de formulaires Grist) ${VERSION}`);
 
-// Styles de base de Grist, puis thème clair par défaut ; Grist remplace ce dernier par le thème
-// de l'utilisateur (couche « grist-theme », prioritaire) dès que le widget est connecté.
+// Styles de base de Grist, puis thème clair par défaut ; Grist remplace ce dernier par le thème de
+// l'utilisateur (couche « grist-theme », prioritaire) dès que le widget est connecté.
 attachCssRootVars("grist");
-const defaults = convertThemeKeysToCssVars({ appearance: "light", colors: GristLight } as any);
+const defaultTheme = convertThemeKeysToCssVars({ appearance: "light", name: "GristLight", colors: GristLight });
+const defaultVars = Object.entries(defaultTheme.colors).map(([key, value]) => `--grist-theme-${key}: ${value};`);
 getOrCreateStyleElement("hub-default-theme", { element: document.getElementById("grist-root-css"), position: "afterend" })
-  .textContent = `@layer grist-base { :root { ${Object.entries(defaults.colors).map(([k, v]) => `--grist-theme-${k}: ${v};`).join(" ")} } }`;
+  .textContent = `@layer grist-base { :root { ${defaultVars.join(" ")} } }`;
 
-// Les éditeurs de texte de Grist (Forms/styles.ts, saveControls) enregistrent quand l'application
-// signale « clipboard_focus », c'est-à-dire quand l'utilisateur clique ailleurs que dans un champ
-// (dans Grist, le focus revient alors à son presse-papiers). Le widget n'a pas l'application
-// Grist : il émet le même signal au clic hors d'un champ.
-const appListeners = new Set<() => void>();
-(window as any).gristApp = {
-  on(name: string, cb: () => void) { if (name === "clipboard_focus") { appListeners.add(cb); } },
-  off(name: string, cb: () => void) { appListeners.delete(cb); },
+// Les zones de saisie des formulaires (Forms/styles.ts, saveControls) enregistrent quand
+// l'application signale « clipboard_focus », c'est-à-dire quand l'utilisateur clique ailleurs que
+// dans un champ (dans Grist, le focus revient alors à son presse-papiers). Le widget n'a pas
+// l'application Grist : il émet le même signal au clic hors d'un champ.
+const clipboardFocusListeners = new Set<() => void>();
+const gristApp: App = {
+  on(name: string, callback: () => void) {
+    if (name === "clipboard_focus") {
+      clipboardFocusListeners.add(callback);
+    }
+  },
+  off(name: string, callback: () => void) {
+    clipboardFocusListeners.delete(callback);
+  },
 };
+(window as any).gristApp = gristApp;
 document.addEventListener("mousedown", (ev) => {
   if (!(ev.target as Element).closest?.("textarea, input, select, [contenteditable]")) {
-    [...appListeners].forEach(cb => cb());
+    [...clipboardFocusListeners].forEach(callback => callback());
   }
 }, true);
 
-const inGrist = typeof grist !== "undefined" && window.parent !== window;
-const readonly = new URLSearchParams(location.search).get("readonly") === "true";
-const OPTION_KEY = "layout";
+class HubApp extends Disposable {
+  public layout = Observable.create<FormLayoutNode | null>(this, null);
+  public editing = Observable.create(this, false);
 
+  private _hub = HubContext.create(this);
+  private _readonly = new URLSearchParams(location.search).get("readonly") === "true";
+  private _inGrist = typeof grist !== "undefined" && window.parent !== window;
+  private _saveTimer = 0;
+
+  /**
+   * Ouvre l'éditeur ; un hub pas encore construit commence par la mise en page de départ.
+   */
+  public edit() {
+    if (this._readonly) {
+      return;
+    }
+    if (!this.layout.get()) {
+      this.layout.set(starterLayout());
+    }
+    this.editing.set(true);
+  }
+
+  public buildDom() {
+    // En lecture, le hub est redessiné quand Grist fournit les pages, les formulaires et l'adresse du
+    // document : ils arrivent après le premier affichage.
+    return dom("div",
+      { style: "height: 100%" },
+      dom.domComputed((use) => {
+        if (use(this.editing)) {
+          return this._buildEditor();
+        }
+        const layout = use(this.layout);
+        use(this._hub.pages);
+        use(this._hub.forms);
+        use(this._hub.docBase);
+        return layout ? buildHubPage(layout, this._hub) : null;
+      }),
+    );
+  }
+
+  public connect() {
+    if (!this._inGrist) {
+      this._showDemo();
+      return;
+    }
+    grist.ready({ requiredAccess: "full", onEditOptions: () => this.edit() });
+    grist.onOptions((options: any) => {
+      if (this.editing.get()) {
+        return;
+      }
+      const layout = options?.[OPTION_KEY];
+      this.layout.set(layout?.type === "Layout" ? layout : null);
+      // Hub pas encore construit : on ouvre directement l'éditeur.
+      if (!this.layout.get()) {
+        this.edit();
+      }
+    });
+    this._loadDocument().catch(err => console.warn("Pages et formulaires indisponibles (accès complet requis) :", err));
+  }
+
+  private _buildEditor() {
+    const view = HubView.create(null, this.layout.get()!, this._hub,
+      layout => this._save(layout),
+      () => this.editing.set(false),
+    );
+    return dom("div",
+      { style: "height: 100%" },
+      dom.autoDispose(view),
+      view.buildDom(),
+    );
+  }
+
+  private _save(layout: FormLayoutNode) {
+    this.layout.setAndTrigger(layout);
+    window.clearTimeout(this._saveTimer);
+    this._saveTimer = window.setTimeout(() => {
+      if (this._inGrist) {
+        grist.setOption(OPTION_KEY, layout).catch(console.error);
+      }
+    }, 300);
+  }
+
+  /**
+   * Pages et formulaires du document (widgets « Formulaire »), et adresse du document.
+   */
+  private async _loadDocument() {
+    const [pages, views, sections] = await Promise.all(
+      ["_grist_Pages", "_grist_Views", "_grist_Views_section"].map(table => grist.docApi.fetchTable(table)),
+    );
+    const viewNames = new Map<number, string>(rows(views).map(view => [view.id, view.name]));
+
+    // Les pages qui contiennent ce hub ne sont pas proposées comme destination.
+    const hubViews = new Set(rows(sections)
+      .filter(section => section.parentKey === "custom" && /hub-formulaire/.test(section.options || ""))
+      .map(section => section.parentId));
+    this._hub.pages.set(rows(pages)
+      .sort((a, b) => a.pagePos - b.pagePos)
+      .filter(page => !hubViews.has(page.viewRef))
+      .map(page => ({ id: page.viewRef, name: viewNames.get(page.viewRef) || "" }))
+      .filter(page => page.name));
+
+    this._hub.forms.set(rows(sections)
+      .filter(section => section.parentKey === "form" && viewNames.has(section.parentId))
+      .map(section => ({
+        id: section.id,
+        name: (section.title || "").trim() || viewNames.get(section.parentId)!,
+        page: viewNames.get(section.parentId)!,
+      })));
+
+    const token = await grist.docApi.getAccessToken({ readOnly: true });
+    const match = /^(.*?)\/api\/docs\/([^/?#]+)/.exec(token.baseUrl || "");
+    this._hub.docBase.set(match ? `${match[1]}/doc/${match[2]}` : null);
+  }
+
+  /**
+   * Hors de Grist : démonstration avec des pages fictives.
+   */
+  private _showDemo() {
+    this._hub.pages.set([{ id: 1, name: "Tableau de bord" }, { id: 2, name: "Projets" }, { id: 3, name: "Budget 2026" }]);
+    this._hub.forms.set([{ id: 7, name: "Signaler un incident", page: "Signalements" }]);
+    this._hub.docBase.set("https://docs.getgrist.com/doc/demo");
+    this.edit();
+  }
+}
+
+/**
+ * Mise en page de départ : un titre, puis une rubrique avec trois cases à remplir.
+ */
 function starterLayout(): FormLayoutNode {
   return {
-    id: uuidv4(), type: "Layout", children: [
+    id: uuidv4(),
+    type: "Layout",
+    children: [
       Paragraph("# **Accueil**"),
       {
-        id: uuidv4(), type: "Section", children: [
+        id: uuidv4(),
+        type: "Section",
+        children: [
           Paragraph("## **Rubrique**"),
           { ...Columns(), children: [Placeholder(), Placeholder(), Placeholder()] },
         ],
@@ -62,75 +203,16 @@ function starterLayout(): FormLayoutNode {
   };
 }
 
-const layout = Observable.create<FormLayoutNode | null>(null, null);
-const editing = Observable.create(null, false);
-let saveTimer = 0;
-
-function save(next: FormLayoutNode) {
-  layout.setAndTrigger(next);
-  window.clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => { if (inGrist) { grist.setOption(OPTION_KEY, next).catch(console.error); } }, 300);
+/** Lignes d'une table renvoyée par fetchTable (colonnes → objets). */
+function rows(table: Record<string, any[]>): Record<string, any>[] {
+  return table.id.map((_, i) => Object.fromEntries(Object.keys(table).map(key => [key, table[key][i]])));
 }
 
-function edit() {
-  if (readonly) { return; }
-  if (!layout.get()) { layout.set(starterLayout()); }
-  editing.set(true);
-}
-
-(window as any).__hub = { layout, editing, edit, hubContext };
-
-const app = dom("div", { style: "height: 100%" },
-  // En lecture, le hub est redessiné quand Grist fournit les pages, les formulaires et l'adresse du
-  // document : ils arrivent après le premier affichage (sinon : « Page à choisir » et pas de lien).
-  dom.domComputed(use => [use(editing), use(editing) ? null : use(layout),
-    use(hubContext.pages), use(hubContext.forms), use(hubContext.docBase)] as const, ([isEditing, current]) => {
-    if (isEditing) {
-      const view = HubView.create(null, layout.get()!, save, () => editing.set(false));
-      return dom("div", { style: "height: 100%" }, dom.autoDispose(view), view.buildDom());
-    }
-    return current ? buildView(current) : null;
-  }),
-);
-gristCommands.init(); // comme app/client/ui/App.ts
-setupLocale().catch(console.error).finally(() => document.body.appendChild(app));
-
-// Données du document : pages, formulaires (widgets « Formulaire ») et adresse de base.
-function rows(table: any) {
-  return table.id.map((id: number, i: number) => Object.fromEntries(Object.keys(table).map(k => [k, table[k][i]])));
-}
-
-async function loadContext() {
-  const [pages, views, sections] = await Promise.all(
-    ["_grist_Pages", "_grist_Views", "_grist_Views_section"].map(t => grist.docApi.fetchTable(t)));
-  const names = new Map<number, string>(rows(views).map((v: any) => [v.id, v.name]));
-  // Les pages qui contiennent ce hub ne sont pas proposées comme destination.
-  const hubViews = new Set(rows(sections)
-    .filter((s: any) => s.parentKey === "custom" && /hub-formulaire/.test(s.options || "")).map((s: any) => s.parentId));
-  hubContext.pages.set(rows(pages).sort((a: any, b: any) => a.pagePos - b.pagePos)
-    .filter((p: any) => !hubViews.has(p.viewRef))
-    .map((p: any) => ({ id: p.viewRef, name: names.get(p.viewRef) || "" })).filter((p: any) => p.name));
-  hubContext.forms.set(rows(sections).filter((s: any) => s.parentKey === "form" && names.has(s.parentId))
-    .map((s: any) => ({ id: s.id, name: (s.title || "").trim() || names.get(s.parentId)!, page: names.get(s.parentId)! })));
-  const token = await grist.docApi.getAccessToken({ readOnly: true });
-  const m = /^(.*?)\/api\/docs\/([^/?#]+)/.exec(token.baseUrl || "");
-  hubContext.docBase.set(m ? `${m[1]}/doc/${m[2]}` : null);
-}
-
-if (inGrist) {
-  grist.ready({ requiredAccess: "full", onEditOptions: edit });
-  grist.onOptions((options: any) => {
-    if (editing.get()) { return; }
-    const next = options?.[OPTION_KEY];
-    layout.set(next && next.type === "Layout" ? next : null);
-    // Hub pas encore construit : on ouvre directement l'éditeur, avec la mise en page de départ.
-    if (!layout.get()) { edit(); }
-  });
-  loadContext().catch(err => console.warn("Pages et formulaires indisponibles (accès complet requis) :", err));
-} else {
-  // Démonstration hors de Grist.
-  hubContext.pages.set([{ id: 1, name: "Tableau de bord" }, { id: 2, name: "Projets" }, { id: 3, name: "Budget 2026" }]);
-  hubContext.forms.set([{ id: 7, name: "Signaler un incident", page: "Signalements" }]);
-  hubContext.docBase.set("https://docs.getgrist.com/doc/demo");
-  edit();
-}
+const app = HubApp.create(null);
+// Accès pour les tests automatiques.
+(window as any).__hub = app;
+commands.init(); // comme app/client/ui/App.ts
+setupLocale()
+  .catch(console.error)
+  .finally(() => document.body.appendChild(app.buildDom()));
+app.connect();

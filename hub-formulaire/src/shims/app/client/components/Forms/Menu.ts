@@ -15,13 +15,10 @@ import { BoxModel, Place } from "app/client/components/Forms/Model";
 import { makeTestId, stopEvent } from "app/client/lib/domUtils";
 import { FocusLayer } from "app/client/lib/FocusLayer";
 import * as menus from "app/client/ui2018/menus";
-import { hubContext } from "../../../../../hub/context";
 
 import { dom, IDomArgs } from "grainjs";
 
 const testId = makeTestId("test-forms-menu-");
-
-export type ButtonKind = "page" | "form" | "url";
 
 /** Destination d'un bouton : une page ou un formulaire du document, ou un site web. */
 export type Destination = { kind: "page" | "form", target: number } | { kind: "url" };
@@ -40,19 +37,27 @@ interface Props {
 /**
  * Choix d'une destination : sous-menus des pages et des formulaires du document, puis site web.
  */
-export function destinationItems(choose: (dest: Destination) => void) {
-  const list = (kind: "page" | "form", icon: any, empty: string) => () => {
-    const items = kind === "page" ? hubContext.pages.get() : hubContext.forms.get();
-    return items.length ?
-      items.map(it => menus.menuItem(() => choose({ kind, target: it.id }), menus.menuIcon(icon), it.name,
-        testId(`${kind}-item`))) :
-      [menus.menuText(empty)];
-  };
+export function destinationItems(view: FormView, choose: (dest: Destination) => void) {
+  const { pages, forms } = view.hub;
+  const pageItems = () => pages.get().length ?
+    pages.get().map(page => menus.menuItem(
+      () => choose({ kind: "page", target: page.id }),
+      menus.menuIcon("Page"),
+      page.name,
+      testId("page-item"),
+    )) :
+    [menus.menuText("Aucune page dans ce document")];
+  const formItems = () => forms.get().length ?
+    forms.get().map(form => menus.menuItem(
+      () => choose({ kind: "form", target: form.id }),
+      menus.menuIcon("Pencil"),
+      form.name,
+      testId("form-item"),
+    )) :
+    [menus.menuText("Aucun formulaire dans ce document")];
   return [
-    menus.menuItemSubmenu(list("page", "Page", "Aucune page dans ce document"), {},
-      menus.menuIcon("Page"), "Vers une page", testId("button-page")),
-    menus.menuItemSubmenu(list("form", "Pencil", "Aucun formulaire dans ce document"), {},
-      menus.menuIcon("Pencil"), "Vers un formulaire", testId("button-form")),
+    menus.menuItemSubmenu(pageItems, {}, menus.menuIcon("Page"), "Vers une page", testId("button-page")),
+    menus.menuItemSubmenu(formItems, {}, menus.menuIcon("Pencil"), "Vers un formulaire", testId("button-form")),
     menus.menuItem(() => choose({ kind: "url" }), menus.menuIcon("World"), "Vers un site web", testId("button-url")),
   ];
 }
@@ -82,7 +87,7 @@ export function buildMenu(props: Props, ...args: IDomArgs<HTMLElement>): IDomArg
       } : null;
 
       const insertMenu = (where: typeof above) => () => [
-        menus.menuGroup("Nouveau bouton", ...destinationItems(dest => where({ button: dest })())),
+        menus.menuGroup("Nouveau bouton", ...destinationItems(view, dest => where({ button: dest })())),
         menus.menuDivider(),
         menus.menuGroup(
           "Blocs",
