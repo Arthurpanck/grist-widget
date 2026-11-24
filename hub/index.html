@@ -46,7 +46,7 @@
           <wa-icon class="empty__icon" name="layout-grid"></wa-icon>
           <template v-if="canEdit()">
             <h2 class="wa-heading-l">Votre hub est vide</h2>
-            <p class="wa-color-text-quiet">Ajoutez, un par un, des boutons vers les pages du document ou vers des sites web.</p>
+            <p class="wa-color-text-quiet">Ajoutez, un par un, des boutons vers les pages, les formulaires du document ou des sites web.</p>
             <wa-button variant="brand" @click="startEditing()"><wa-icon slot="start" name="plus"></wa-icon>Ajouter le premier bouton</wa-button>
             <wa-button appearance="plain" size="s" @click="store.gallery = true">ou partir d'un modèle</wa-button>
           </template>
@@ -59,10 +59,6 @@
 
         <settings-panel v-if="store.editing && store.panel"></settings-panel>
       </div>
-
-      <wa-button v-if="showFab" class="floating floating--top" size="s" appearance="outlined" pill @click="startEditing()">
-        <wa-icon slot="start" name="pencil" label="Modifier le hub"></wa-icon><span class="floating__text">Modifier</span>
-      </wa-button>
 
       <button-card v-if="store.editing"></button-card>
 
@@ -193,10 +189,13 @@
         <span class="dest__label" :id="uid + '-label'">{{ label }}</span>
         <div class="dest__kinds" role="group" :aria-labelledby="uid + '-label'">
           <button type="button" class="dest__kind" :aria-pressed="String(kind === 'page')" @mousedown.prevent @click="setKind('page')">
-            <wa-icon name="file-text"></wa-icon>Une page
+            <wa-icon name="file-text"></wa-icon>Page
+          </button>
+          <button type="button" class="dest__kind" :aria-pressed="String(kind === 'form')" @mousedown.prevent @click="setKind('form')">
+            <wa-icon name="square-pen"></wa-icon>Formulaire
           </button>
           <button type="button" class="dest__kind" :aria-pressed="String(kind === 'url')" @mousedown.prevent @click="setKind('url')">
-            <wa-icon name="globe"></wa-icon>Un site web
+            <wa-icon name="globe"></wa-icon>Site web
           </button>
         </div>
         <div class="dest__field">
@@ -204,7 +203,7 @@
           <input :id="uid" ref="input" class="dest__input" type="text" role="combobox" autocomplete="off" spellcheck="false"
             aria-autocomplete="list" :aria-labelledby="uid + '-label'" :aria-expanded="String(options.length > 0)" :aria-controls="uid + '-list'"
             :aria-activedescendant="options.length ? uid + '-o' + active : null"
-            :placeholder="kind === 'url' ? 'www.exemple.fr' : 'Nom de la page'" :value="query" @input="query = $event.target.value" @keydown="onKey">
+            :placeholder="kind === 'url' ? 'www.exemple.fr' : kind === 'form' ? 'Nom du formulaire' : 'Nom de la page'" :value="query" @input="query = $event.target.value" @keydown="onKey">
         </div>
         <ul :id="uid + '-list'" class="dest__list" role="listbox" :aria-labelledby="uid + '-label'">
           <li v-for="(o, i) in options" :key="o.key" :id="uid + '-o' + i" role="option" :aria-selected="String(i === active)"
@@ -244,9 +243,9 @@
               @pick="setDest" @cancel="changing = false"></dest-picker>
             <template v-else>
               <div class="card__dest">
-                <span class="card__dest-icon"><wa-icon :name="b.kind === 'url' ? 'globe' : 'file-text'"></wa-icon></span>
+                <span class="card__dest-icon"><wa-icon :name="KINDS[b.kind][0]"></wa-icon></span>
                 <span class="card__dest-text">
-                  <span class="card__dest-kind">{{ b.kind === 'url' ? 'Site web' : 'Page du document' }}</span>
+                  <span class="card__dest-kind">{{ KINDS[b.kind][1] }}</span>
                   <span class="card__dest-name">{{ describe }}</span>
                 </span>
                 <wa-button size="s" appearance="outlined" @click="changing = true">Changer</wa-button>
@@ -315,13 +314,6 @@
                   <input ref="bgFile" type="file" accept="image/*" hidden @change="importImage($event, v => d.background.image = v, false)">
                 </div>
               </div>
-              <wa-radio-group label="Voile" hint="Assombrit ou éclaircit l'image pour garder le texte lisible." orientation="horizontal"
-                :value.prop="d.background.tone" @change="d.background.tone = $event.target.value">
-                <wa-radio appearance="button" value="dark">Sombre</wa-radio>
-                <wa-radio appearance="button" value="light">Clair</wa-radio>
-              </wa-radio-group>
-              <wa-slider label="Intensité du voile" min="0" max="0.9" step="0.05" with-tooltip
-                :value-formatter.prop="v => Math.round(v * 100) + ' %'" :value.prop="d.background.veil" @input="d.background.veil = Number($event.target.value)"></wa-slider>
             </template>
           </div>
 

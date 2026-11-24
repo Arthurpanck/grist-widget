@@ -251,7 +251,7 @@ export function defaultConfig() {
 }
 
 export function newButton(extra = {}) {
-  return { id: uid('b'), label: '', description: '', icon: 'arrow-right', color: 'auto', kind: 'page', page: null, url: '', newTab: true, ...extra };
+  return { id: uid('b'), label: '', description: '', icon: 'arrow-right', color: 'auto', kind: 'page', page: null, form: null, url: '', newTab: true, ...extra };
 }
 
 export function newSection(extra = {}) {
@@ -300,8 +300,9 @@ function normalizeButton(b, colors) {
     description: str(b.description),
     icon: V1_ICONS[icon] || icon,
     color: colors[b.color] ? b.color : 'auto',
-    kind: pick(b.kind, ['page', 'url'], 'page'),
+    kind: pick(b.kind, ['page', 'form', 'url'], 'page'),
     page: Number(b.page) > 0 ? Number(b.page) : null,
+    form: Number(b.form) > 0 ? Number(b.form) : null,
     url: str(b.url),
     newTab: b.newTab !== false,
   };
@@ -524,6 +525,10 @@ export function fromTemplate(id, pages, base = defaultConfig()) {
 }
 
 /** Pages d'exemple pour les miniatures quand le document n'en fournit pas. */
+export const SAMPLE_FORMS = [
+  { id: 101, name: 'Signaler un incident', page: 'Signalements' }, { id: 102, name: 'Demande de matériel', page: 'Demandes' },
+];
+
 export const SAMPLE_PAGES = [
   { viewRef: 1, name: 'Tableau de bord' }, { viewRef: 2, name: 'Projets' }, { viewRef: 3, name: 'Budget' },
   { viewRef: 4, name: 'Carte des sites' }, { viewRef: 5, name: 'Annuaire' }, { viewRef: 6, name: 'Mode d\'emploi' },

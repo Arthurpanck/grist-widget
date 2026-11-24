@@ -40,6 +40,15 @@ export async function loadPages() {
     .filter(p => p.name);
 }
 
+/** Formulaires du document : widgets « Formulaire », avec leur titre (ou, à défaut, celui de leur page). */
+export async function loadForms() {
+  const [views, sections] = await Promise.all(['_grist_Views', '_grist_Views_section'].map(t => grist.docApi.fetchTable(t)));
+  const names = new Map(rows(views).map(v => [v.id, v.name]));
+  return rows(sections)
+    .filter(s => s.parentKey === 'form' && names.has(s.parentId))
+    .map(s => ({ id: s.id, name: (s.title || '').trim() || names.get(s.parentId), page: names.get(s.parentId) }));
+}
+
 /** Adresse de base du document (…/doc/<id>), déduite du jeton d'accès de l'API. */
 export async function loadDocBase() {
   const token = await grist.docApi.getAccessToken({ readOnly: true });
