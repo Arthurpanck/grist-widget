@@ -13,7 +13,7 @@ import { createApp, reactive, computed, ref, watch, onMounted, nextTick, Sortabl
 import * as C from './config.js';
 import * as G from './grist.js';
 
-export const APP_VERSION = '3.2.0';
+export const APP_VERSION = '3.3.0';
 console.info(`Hub de navigation ${APP_VERSION}`);
 
 // Icônes Lucide pour tous les <wa-icon> (les icônes internes de Web Awesome restent les siennes).
@@ -39,6 +39,7 @@ const store = reactive({
   panelTab: 'affichage',
   access: null,
   pages: [],
+  forms: [],
   pagesLoaded: false,
   docBase: null,
   confirm: null,        // { label, text, ok, resolve }
@@ -66,6 +67,7 @@ function ask(options) {
 /* ================================================================== */
 
 const pageOf = viewRef => store.pages.find(p => p.viewRef === viewRef);
+const formOf = id => store.forms.find(f => f.id === id);
 const isIconName = icon => /^[a-z0-9-]+$/.test(icon || '');
 const sectionOf = id => store.draft.blocks.find(b => b.id === id && b.type === 'section');
 
@@ -82,6 +84,7 @@ function hostOf(url) {
 }
 
 function autoLabel(b) {
+  if (b.kind === 'form') { return formOf(b.form)?.name || ''; }
   return (b.kind === 'page' ? pageOf(b.page)?.name : hostOf(b.url)) || '';
 }
 
@@ -96,20 +99,30 @@ function linkOf(cfg, b) {
     const sameTab = !b.newTab || /^(mailto|tel):/.test(href);
     return { href, target: sameTab ? '_top' : '_blank', external: !sameTab };
   }
-  if (!b.page) { return { problem: 'Aucune page choisie' }; }
-  if (store.pagesLoaded && !pageOf(b.page)) { return { problem: 'Page supprimée' }; }
+  if (b.kind === 'form') {
+    if (!b.form) { return { problem: 'Aucun formulaire choisi' }; }
+    if (store.pagesLoaded && !formOf(b.form)) { return { problem: 'Formulaire supprimé' }; }
+  } else {
+    if (!b.page) { return { problem: 'Aucune page choisie' }; }
+    if (store.pagesLoaded && !pageOf(b.page)) { return { problem: 'Page supprimée' }; }
+  }
   const base = C.cleanDocUrl(cfg.docUrl) || store.docBase;
   if (!base) { return { problem: 'Adresse du document inconnue', missingBase: true }; }
-  return { href: `${base}/p/${b.page}`, target: '_top' };
+  // Un formulaire s'ouvre en pleine page (lien « /f/ » de Grist), dans un nouvel onglet pour garder le hub.
+  return b.kind === 'form' ? { href: `${base}/f/${b.form}`, target: '_blank' } : { href: `${base}/p/${b.page}`, target: '_top' };
 }
 
 function describeLink(b) {
   if (b.kind === 'url') { return hostOf(b.url) || 'Site web'; }
+  if (b.kind === 'form') { const f = formOf(b.form); return f ? `Formulaire « ${f.name} »` : 'Formulaire à choisir'; }
   const p = pageOf(b.page);
   return p ? `Page « ${p.name} »` : 'Page à choisir';
 }
 
-const iconFor = dest => (dest.kind === 'url' ? 'globe' : C.guessIcon(pageOf(dest.page)?.name));
+const iconFor = dest => (dest.kind === 'url' ? 'globe' : dest.kind === 'form' ? 'square-pen' : C.guessIcon(pageOf(dest.page)?.name));
+/** Destination choisie → champs du bouton. */
+const destFields = dest => (dest.kind === 'url' ? { kind: 'url', url: dest.url } : dest.kind === 'form' ? { kind: 'form', form: dest.form } : { kind: 'page', page: dest.page });
+const KINDS = { page: ['file-text', 'Page du document'], form: ['square-pen', 'Formulaire'], url: ['globe', 'Site web'] };
 
 function addButton(sectionId, dest) {
   sectionOf(sectionId).buttons.push(C.newButton({ ...dest, icon: iconFor(dest) }));
@@ -228,7 +241,7 @@ const DestPicker = {
   emits: ['pick', 'cancel', 'leave'],
   setup(props, { emit }) {
     const uid = 'dest' + (++pickerCount);
-    const kind = ref(props.initialKind === 'url' ? 'url' : 'page');
+    const kind = ref(['page', 'form', 'url'].includes(props.initialKind) ? props.initialKind : 'page');
     const query = ref('');
     const active = ref(0);
     const input = ref(null);
@@ -242,6 +255,16 @@ const DestPicker = {
         list.push({ key: 'url', kind: 'url', url, icon: 'globe', label: hostOf(url) || url, hint: 'Site web' });
       }
       if (kind.value === 'url') { return list; }
+      if (kind.value === 'form') {
+        const usedForms = store.draft ? new Set(C.allButtons(store.draft).filter(b => b.kind === 'form').map(b => b.form)) : new Set();
+        store.forms
+          .filter(f => !q || normalizeText(f.name).includes(q) || normalizeText(f.page).includes(q))
+          .sort((a, b) => usedForms.has(a.id) - usedForms.has(b.id))
+          .slice(0, 8)
+          .forEach(f => list.push({ key: 'f' + f.id, kind: 'form', form: f.id, icon: 'square-pen', label: f.name,
+            hint: usedForms.has(f.id) ? 'déjà sur le hub' : (f.page !== f.name ? f.page : '') }));
+        return list;
+      }
       const used = store.draft ? new Set(C.allButtons(store.draft).filter(b => b.kind === 'page').map(b => b.page)) : new Set();
       store.pages
         .filter(p => !p.isHub && (!q || normalizeText(p.name).includes(q)))
@@ -254,6 +277,10 @@ const DestPicker = {
 
     const emptyText = computed(() => {
       if (kind.value === 'url') { return 'Saisissez ou collez l\'adresse du site, par exemple www.grandlyon.com.'; }
+      if (kind.value === 'form') {
+        if (!store.forms.length) { return 'Ce document n\'a pas encore de formulaire. Ajoutez un widget « Formulaire » sur une page de Grist.'; }
+        return 'Aucun formulaire ne correspond.';
+      }
       if (!store.pages.length) { return 'Collez une adresse web (https://…). Pour choisir une page, accordez l\'accès complet au widget.'; }
       return query.value.trim() ? 'Aucune page ne correspond. Collez une adresse web pour créer un lien.' : 'Collez une adresse web (https://…).';
     });
@@ -261,7 +288,7 @@ const DestPicker = {
     watch(options, () => { active.value = 0; });
 
     function pick(o) {
-      emit('pick', o.kind === 'url' ? { kind: 'url', url: o.url } : { kind: 'page', page: o.page });
+      emit('pick', destFields(o));
       query.value = '';
       input.value?.focus();
     }
@@ -322,7 +349,7 @@ const ButtonCard = {
 
     function setDest(dest) {
       const before = iconFor(b.value);
-      Object.assign(b.value, dest.kind === 'url' ? { kind: 'url', url: dest.url } : { kind: 'page', page: dest.page });
+      Object.assign(b.value, destFields(dest));
       if (!b.value.icon || b.value.icon === before || b.value.icon === 'arrow-right') { b.value.icon = iconFor(dest); }
       changing.value = false;
     }
@@ -345,7 +372,7 @@ const ButtonCard = {
     });
 
     return {
-      b, changing, moreIcons, iconQuery, iconChoices, icons, setDest, remove, onHide, colors, autoGradient, chartColors,
+      b, changing, moreIcons, iconQuery, iconChoices, icons, setDest, remove, onHide, colors, autoGradient, chartColors, KINDS,
       describe: computed(() => (b.value ? describeLink(b.value) : '')),
       placeholder: computed(() => (b.value ? autoLabel(b.value) || 'Texte du bouton' : '')),
     };
@@ -374,6 +401,9 @@ const vSortable = {
       filter: value.filter,
       preventOnFilter: false,
       animation: 150,
+      // Glisser « à la souris » plutôt qu'en glisser-déposer natif : Firefox ne sait pas glisser un <button>.
+      forceFallback: true,
+      fallbackTolerance: 4,
       onMove: e => (e.related.classList.contains('hub-adder') ? -1 : true),
       onEnd(e) {
         lastDrag = Date.now();
@@ -447,7 +477,7 @@ function readImage(file, max, keepPng) {
 async function loadContext() {
   if (!G.available || (store.access && store.access !== 'full')) { return; }
   try {
-    store.pages = await G.loadPages();
+    [store.pages, store.forms] = await Promise.all([G.loadPages(), G.loadForms().catch(() => [])]);
     store.pagesLoaded = true;
   } catch (e) {
     console.warn('Hub : liste des pages indisponible (accès complet requis).', e);
@@ -489,7 +519,6 @@ const App = {
     const dirty = computed(() => store.editing && JSON.stringify(store.draft) !== store.baseline);
     const showGallery = computed(() => store.loaded && canEdit() && store.gallery);
     const emptyView = computed(() => !store.editing && isEmpty(store.saved));
-    const showFab = computed(() => canEdit() && !store.editing && !showGallery.value && !emptyView.value && store.saved?.showEditButton);
 
     function chooseTemplate(id) {
       const base = store.editing ? store.draft : store.saved;
@@ -538,7 +567,7 @@ const App = {
       root.toggle('wa-brand-red', charte !== 'dsfr');
     }, { immediate: true });
 
-    return { store, config, dirty, showGallery, emptyView, showFab, chooseTemplate, startBlank, finish, cancel, answer, startEditing, canEdit };
+    return { store, config, dirty, showGallery, emptyView, chooseTemplate, startBlank, finish, cancel, answer, startEditing, canEdit };
   },
 };
 
@@ -566,6 +595,7 @@ if (G.available) {
 } else {
   // Ouvert hors de Grist : démonstration avec des pages fictives.
   store.pages = C.SAMPLE_PAGES;
+  store.forms = C.SAMPLE_FORMS;
   store.pagesLoaded = true;
   store.docBase = 'https://grist.exemple.fr/doc/demo';
   store.saved = C.fromTemplate('portail', C.SAMPLE_PAGES);

@@ -23,9 +23,15 @@ Exemple de résultat (modèle « Accueil visuel ») :
 
 Tout se fait sur la page elle-même. Un hub neuf commence par un titre et une rubrique vides.
 
+Pour modifier un hub existant, ouvrez le menu du widget (⋮), puis **Ouvrir la configuration**. Les lecteurs ne
+voient aucun bouton d'édition.
+
 1. **Créer un bouton.** À la fin de chaque rubrique, une case « Ajouter un bouton » attend à l'endroit où le
-   bouton apparaîtra. Elle contient un seul champ, « Vers où mène ce bouton ? » :
-   - on tape le nom d'une page (les pages sans bouton sont proposées en premier) ou on colle une adresse web ;
+   bouton apparaîtra. Elle contient un seul champ, « Vers où mène ce bouton ? », avec trois choix :
+   - **Page** : on tape le nom d'une page du document (les pages sans bouton sont proposées en premier) ;
+   - **Formulaire** : on choisit un des widgets « Formulaire » du document ; le bouton ouvre le formulaire en
+     pleine page, dans un nouvel onglet ;
+   - **Site web** : on tape ou on colle une adresse (une adresse collée dans « Page » est aussi reconnue) ;
    - **Entrée** crée le bouton, avec son nom et une icône devinée ;
    - le champ reste ouvert pour le bouton suivant ; **Échap** le referme.
 2. **Modifier un bouton.** Un clic sur un bouton ouvre sa fiche, juste à côté :
@@ -37,10 +43,10 @@ Tout se fait sur la page elle-même. Un hub neuf commence par un titre et une ru
    - Les titres se modifient sur place.
    - La corbeille d'un bloc le supprime.
    - Les titres, sous-titres et rubriques vides sont retirés en fin d'édition.
-4. **Déplacer.** On glisse un bouton pour changer sa place, y compris vers une autre rubrique. On glisse un titre,
+4. **Déplacer.** On glisse un bouton pour changer sa place dans sa rubrique ou l'envoyer dans une autre. On glisse un titre,
    un sous-titre ou une rubrique par sa poignée (⋮⋮, à gauche).
 5. **Afficher.** Le bouton « Affichage » ouvre un panneau à droite, le hub restant visible :
-   - image de fond (adresse ou photo importée, avec un voile réglable) ;
+   - image de fond (adresse ou photo importée) ;
    - disposition (taille, alignement, colonnes).
 
    Sans image, le fond « Halo métropolitain » est utilisé.
