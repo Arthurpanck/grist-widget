@@ -7,8 +7,7 @@
 #   bash tools/sync-grist.sh [chemin/vers/grist-core]
 #
 # Sans argument, grist-core est récupéré (clone partiel) au commit indiqué ci-dessous.
-# Quelques fichiers ne sont pas copiés, car liés au document Grist ouvert ou à toute l'application :
-# src/shims/ les fournit
+# Seuls 4 fichiers ne sont pas copiés, car liés au document Grist ouvert : src/shims/ les fournit
 # (voir README.md).
 set -euo pipefail
 
@@ -23,8 +22,6 @@ ENTRIES=(
   app/client/components/Forms/Columns
   app/client/components/Forms/styles
   app/client/components/FormRenderer
-  app/client/ui/RenameDocModal
-  app/client/ui/EmojiPicker
   app/client/components/commands
   app/client/lib/localization
   app/client/ui2018/menus
@@ -37,12 +34,7 @@ ENTRIES=(
   app/common/gutil
 )
 # Fichiers liés au document Grist (colonnes, enregistrements, connexion au serveur) : fournis par src/shims.
-# HomeModel (liste des documents) ne sert que de type à RenameDocModal : il n'est pas copié.
-# HomeLeftPane (panneau gauche de l'accueil, qui importe toute l'application) : src/shims n'en garde que
-# le style de champ dont ui2018/pages a besoin.
 STOPS=(
-  app/client/models/HomeModel
-  app/client/ui/HomeLeftPane
   app/client/components/Forms/FormView
   app/client/components/Forms/Field
   app/client/components/Forms/Menu

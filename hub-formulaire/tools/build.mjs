@@ -6,7 +6,7 @@
 // de code, graphiques, calendrier, formules mathématiques… Le hub ne passe jamais par ces chemins : ces modules sont remplacés par des
 // modules vides au lieu d'être embarqués.
 import { build } from "esbuild";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,26 +33,19 @@ const gristPaths = {
   },
 };
 
-// Modules ES découpés : comme dans Grist (webpack), les imports dynamiques restants, dont le
-// sélecteur d'emoji et ses données, deviennent des fichiers chargés seulement à leur première
-// utilisation (dist/chunks/).
-rmSync(join(ROOT, "dist"), { recursive: true, force: true });
 await build({
-  entryPoints: { hub: join(ROOT, "src/hub/main.ts") },
+  entryPoints: [join(ROOT, "src/hub/main.ts")],
   bundle: true,
-  format: "esm",
-  splitting: true,
-  chunkNames: "chunks/[name]-[hash]",
+  format: "iife",
   target: "es2020",
   minify: process.env.DEV !== "1",
   sourcemap: process.env.DEV === "1",
-  outdir: join(ROOT, "dist"),
+  outfile: join(ROOT, "dist/hub.js"),
   plugins: [gristPaths],
   // Mêmes options TypeScript que grist-core (décorateurs « experimental »).
   tsconfig: join(ROOT, "tsconfig.json"),
-  // Même ordre que webpack (le bundler de Grist) pour le navigateur : « browser » (bowser, utilisé par
-  // l'icône de document), puis la version ESM (popper.js, utilisé par les menus popweasel).
-  mainFields: ["browser", "module", "main"],
+  // Comme le bundler de Grist : version ESM des paquets (popper.js, utilisé par les menus popweasel).
+  mainFields: ["module", "main"],
   define: { "process.env.NODE_ENV": '"production"' },
   logLevel: "info",
 });

@@ -20,25 +20,27 @@ export interface ButtonData {
   page?: number | null;
   form?: number | null;
   url?: string;
-  /** Icône, au format de l'icône d'un document Grist (RenameDocModal, DocIcon). */
-  icon?: IconSpec | string;
 }
 
-
-export interface IconSpec { backgroundColor: string; color: string; emoji: string | null; }
-
-/** Emoji par défaut : page du document, formulaire, site web. */
+/** Emoji par défaut, quand le texte du bouton n'en commence pas par un : page, formulaire, site web. */
 export const DEFAULT_EMOJI: Record<string, string> = { page: "📄", form: "📝", url: "🌐" };
-/** Couleurs par défaut : le vert du bouton « Envoyer » des formulaires de Grist, texte blanc. */
-export const DEFAULT_ICON_COLORS = { backgroundColor: "#16B378", color: "#FFFFFF" };
 
-export function defaultIcon(kind?: string): IconSpec {
-  return { ...DEFAULT_ICON_COLORS, emoji: DEFAULT_EMOJI[kind || "page"] };
+// Même règle que les noms de pages dans Grist : un emoji en tête du nom devient l'icône. Expression
+// reprise de grist-core app/client/ui2018/pages.ts (splitPageInitial, Apache-2.0), qui n'est pas
+// importé ici car il entraîne le panneau gauche de l'accueil de Grist, et avec lui toute l'application.
+const emojiPart = /(?:\p{RI}\p{RI}|\p{Emoji}(?:\p{EMod}|\u{FE0F}\u{20E3}?|[\u{E0020}-\u{E007E}]+\u{E007F})?)/u;
+const pageInitialRegex = new RegExp(`^${emojiPart.source}(?:\\u{200D}${emojiPart.source})*`, "u");
+
+/** Sépare l'emoji de tête (s'il y en a un) du reste du texte. */
+export function splitEmoji(text: string): { emoji: string | null, rest: string } {
+  const m = text.match(pageInitialRegex);
+  // Comme dans Grist : les chiffres correspondent à \p{Emoji} mais n'en sont pas.
+  return m && !/^\d$/.test(m[0]) ? { emoji: m[0], rest: text.slice(m[0].length).trim() } : { emoji: null, rest: text };
 }
 
-/** Icône d'un bouton ; celles des versions précédentes (nom d'icône) prennent la valeur par défaut. */
-export function iconOf(b: ButtonData): IconSpec {
-  return b.icon && typeof b.icon === "object" ? { ...defaultIcon(b.kind), ...b.icon } : defaultIcon(b.kind);
+/** Icône de la tuile : l'emoji en tête du texte, sinon celui du type de destination. */
+export function emojiOf(b: ButtonData) {
+  return splitEmoji(b.label?.trim() || "").emoji || DEFAULT_EMOJI[b.kind || "page"];
 }
 
 function hostOf(url?: string) {
@@ -54,7 +56,8 @@ export function safeUrl(url?: string) {
 
 /** Libellé affiché : celui saisi, sinon le nom de la destination. */
 export function labelOf(b: ButtonData) {
-  if (b.label?.trim()) { return b.label.trim(); }
+  const own = splitEmoji(b.label?.trim() || "").rest;
+  if (own) { return own; }
   if (b.kind === "page") { return hubContext.pages.get().find(p => p.id === b.page)?.name || "Page à choisir"; }
   if (b.kind === "form") { return hubContext.forms.get().find(f => f.id === b.form)?.name || "Formulaire à choisir"; }
   return hostOf(b.url) || "Site web à choisir";
