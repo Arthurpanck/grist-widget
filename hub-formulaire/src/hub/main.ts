@@ -6,6 +6,8 @@ import { FormLayoutNode } from "app/client/components/FormRenderer";
 import { Columns, Placeholder } from "app/client/components/Forms/Columns";
 import { Paragraph } from "app/client/components/Forms/Paragraph";
 import { attachCssRootVars, theme } from "app/client/ui2018/cssVars";
+import { setupLocale } from "app/client/lib/localization";
+import * as gristCommands from "app/client/components/commands";
 import { primaryButton } from "app/client/ui2018/buttons";
 import { convertThemeKeysToCssVars } from "app/common/ThemePrefs";
 import { GristLight } from "app/common/themes/GristLight";
@@ -18,6 +20,7 @@ import { HubView } from "./HubView";
 import { buildView } from "./view";
 
 declare const grist: any;
+(window as any).gristConfig = { supportedLngs: ["fr", "en"], namespaces: ["client"], userLocale: "fr" };
 export const VERSION = "0.1.0";
 console.info(`Hub (éditeur de formulaires Grist) ${VERSION}`);
 
@@ -90,7 +93,8 @@ const app = dom("div", { style: "height: 100%" },
     return buildView(current);
   }),
 );
-document.body.appendChild(app);
+gristCommands.init(); // comme app/client/ui/App.ts
+setupLocale().catch(console.error).finally(() => document.body.appendChild(app));
 
 // Données du document : pages, formulaires (widgets « Formulaire ») et adresse de base.
 function rows(table: any) {

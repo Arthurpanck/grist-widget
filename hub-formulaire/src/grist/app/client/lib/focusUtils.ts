@@ -1,0 +1,442 @@
+/**
+ * This file started as a copy of code authored by Kitty Giraudel for a11y-dialog https://github.com/KittyGiraudel/a11y-dialog, thanks to her!
+ *
+ * Copyright (c) 2025 Kitty Giraudel
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+ * documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+ * and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+ * TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+ * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
+import { FocusLayer } from "app/client/lib/FocusLayer";
+
+import { Disposable, dom, DomElementArg, DomMethod } from "grainjs";
+
+/**
+ * Trap the tab key inside the given element.
+ *
+ * That makes pressing tab and shift+tab loop exclusively through focusable elements that are *in* the element.
+ *
+ * The lock is pretty permissive, only acting when using the Tab key inside the element.
+ * If focus is moved outside the element (e.g. programmatically, or by clicking outside of it), the lock doesn't do
+ * anything until focus is moved back inside the element.
+ *
+ * This means you don't need to think about locks that could collapse between different containers, like two modals
+ * on top of each other.
+ */
+export const enableTabTrap = (element: HTMLElement) => {
+  return dom.onElem(element, "keydown", (event, elem) => {
+    if (event.key === "Tab") {
+      trapTabKey(elem, event);
+    }
+  });
+};
+
+/**
+ * Lock keyboard focus inside a given element until it is removed from the DOM.
+ *
+ * The lock is done through trapping Tab key (see `enableTabTrap`), and pausing Mousetrap
+ * (so that the commands bound on Tab are not triggered when tabbing inside the element).
+ *
+ * This is a useful default to use for popups, modal tooltips and things like that.
+ */
+export function lockFocusUntilRemoved(
+  owner: Disposable,
+  options: {
+    pauseMousetrap?: boolean;
+  } = {},
+): DomMethod<HTMLElement> {
+  const { pauseMousetrap = true } = options;
+
+  return (elem: HTMLElement) => {
+    elem.classList.add(kbFocusHighlighterClass);
+    if (!elem.hasAttribute("tabindex")) {
+      elem.setAttribute("tabindex", "-1");
+    }
+    enableTabTrap(elem);
+    FocusLayer.create(owner, {
+      defaultFocusElem: elem,
+      pauseMousetrap,
+    });
+  };
+}
+
+/**
+ * Trap the tab key within the given element.
+ *
+ * This only wraps focus when we detect the user tabs out of bounds (tab on the last focusable element,
+ * or shift+tab on the first focusable element). It doesn't force focus any other way, so it doesn't
+ * interfere with potential popups appearing or anything else.
+ */
+export function trapTabKey(container: HTMLElement, tabEvent: KeyboardEvent) {
+  if (!container) {
+    return;
+  }
+  const [firstFocusableEl, lastFocusableEl] = getFocusableEdges(container);
+
+  const activeEl = getActiveEl();
+
+  // Nothing to tab inside the container: prevent tabbing outside
+  if (activeEl === container && !firstFocusableEl && !lastFocusableEl) {
+    tabEvent.preventDefault();
+  }
+
+  // If the SHIFT key is pressed while tabbing (moving backwards) and the
+  // currently focused item is the first one, move the focus to the last
+  // focusable item from the element
+  if (tabEvent.shiftKey && activeEl === firstFocusableEl) {
+    lastFocusableEl?.focus();
+    tabEvent.preventDefault();
+  } else if (!tabEvent.shiftKey && activeEl === lastFocusableEl) {
+    // If the SHIFT key is not pressed (moving forwards) and the currently focused
+    // item is the last one, move the focus to the first focusable item from the element
+    firstFocusableEl?.focus();
+    tabEvent.preventDefault();
+  }
+}
+
+function getFocusableEdges(el: HTMLElement) {
+  // Check for a focusable element within the subtree of the given element.
+  const firstEl = findFocusableEl(el, true);
+
+  // Only if we find the first element do we need to look for the last one. If
+  // there’s no last element, we set `lastEl` as a reference to `firstEl` so
+  // that the returned array is still always of length 2.
+  const lastEl = firstEl ? findFocusableEl(el, false) || firstEl : null;
+
+  return [firstEl, lastEl] as const;
+}
+
+/**
+ * Move focus to the next/previous focusable in `container` (same ordering as Tab / Shift+Tab).
+ */
+export function focusAdjacentFocusable(container: HTMLElement, delta: 1 | -1, options: {
+  /** Additional CSS selector string to restrict the list of focusable elements we should try to focus */
+  matching?: string;
+  /** Set to false to include [tabindex="-1"] elements */
+  onlyUserFocusable?: boolean,
+  /** Set to true to try to focus the first element of the container when the last element is reached and vice-versa */
+  loop?: boolean,
+} = {}): boolean {
+  const { matching, onlyUserFocusable = true, loop = false } = options;
+
+  const active = getActiveEl();
+  if (!(active instanceof HTMLElement) || !container.contains(active)) {
+    return false;
+  }
+
+  const focusables = onlyUserFocusable ? getUserFocusables(container) : getAllFocusables(container);
+
+  let targets: (HTMLElement | null)[] = focusables;
+  let fallbackTargetIndex = -1;
+  if (matching) {
+    targets = focusables.map((el, index) => {
+      if (!el.matches(matching)) {
+        return null;
+      }
+      if (
+        (delta === 1 && fallbackTargetIndex === -1) || (loop && delta === -1)
+      ) {
+        fallbackTargetIndex = index;
+      }
+      return el;
+    });
+  }
+
+  let i = focusables.indexOf(active);
+  if (i < 0 && fallbackTargetIndex >= 0) {
+    targets[fallbackTargetIndex]?.focus();
+    return true;
+  }
+  for (let j = 0; j < targets.length - 1; j++) {
+    i = loop ?
+      (i + delta + targets.length) % targets.length :
+      i + delta;
+    if (i < 0 || i >= targets.length) {
+      break;
+    }
+    if (targets[i]) {
+      targets[i]?.focus();
+      return true;
+    }
+  }
+  return false;
+}
+
+export function getUserFocusables(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(userFocusableSelectorsString)).filter(isUserFocusable);
+}
+
+export function getAllFocusables(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(allFocusableSelectorsString))
+    .filter(el => isProgrammaticallyFocusable(el, true));
+}
+
+function findFocusableEl(
+  el: HTMLElement,
+  forward: boolean,
+): HTMLElement | null {
+  // If we’re walking forward, check if this element is focusable, and return it
+  // immediately if it is.
+  if (forward && isUserFocusable(el)) { return el; }
+
+  // We should only search the subtree of this element if it can have focusable
+  // children.
+  if (canHaveFocusableChildren(el)) {
+    // Start walking the DOM tree, looking for focusable elements.
+    if (el.shadowRoot) {
+      // Case 1: If this element has a shadow root, search it recursively.
+
+      // Descend into this subtree.
+      let next = getNextChildEl(el.shadowRoot, forward);
+
+      // Traverse the siblings, searching the subtree of each one for focusable
+      // elements.
+      while (next) {
+        const focusableEl = findFocusableEl(next as HTMLElement, forward);
+        if (focusableEl) { return focusableEl; }
+        next = getNextSiblingEl(next as HTMLElement, forward);
+      }
+    } else if (el.localName === "slot") {
+      // Case 2: If this element is a slot for a Custom Element, search its
+      // assigned elements recursively.
+
+      const assignedElements = (el as HTMLSlotElement).assignedElements({
+        flatten: true,
+      }) as HTMLElement[];
+      if (!forward) { assignedElements.reverse(); }
+
+      for (const assignedElement of assignedElements) {
+        const focusableEl = findFocusableEl(assignedElement, forward);
+        if (focusableEl) { return focusableEl; }
+      }
+    } else {
+      // Case 3: this is a regular Light DOM element. Search its subtree.
+
+      // Descend into this subtree.
+      let next = getNextChildEl(el, forward);
+
+      // Traverse siblings, searching the subtree of each one
+      // for focusable elements.
+      while (next) {
+        const focusableEl = findFocusableEl(next as HTMLElement, forward);
+        if (focusableEl) { return focusableEl; }
+        next = getNextSiblingEl(next as HTMLElement, forward);
+      }
+    }
+  }
+
+  // If we’re walking backward, we want to check the element’s entire subtree
+  // before checking the element itself. If this element is focusable, return
+  // it.
+  if (!forward && isUserFocusable(el)) { return el; }
+
+  return null;
+}
+
+/**
+ * Get the active element, accounting for Shadow DOM subtrees.
+ * @author Cory LaViska
+ * @see: https://www.abeautifulsite.net/posts/finding-the-active-element-in-a-shadow-root/
+ */
+export function getActiveEl(
+  root: Document | ShadowRoot = document,
+): Element | null {
+  const activeEl = root.activeElement;
+
+  if (!activeEl) { return null; }
+
+  // If there’s a shadow root, recursively find the active element within it.
+  // If the recursive call returns null, return the active element
+  // of the top-level Document.
+  if (activeEl.shadowRoot) { return getActiveEl(activeEl.shadowRoot) || document.activeElement; }
+
+  // If not, we can just return the active element
+  return activeEl;
+}
+
+/**
+ * Determine if an element can have focusable children. Useful for bailing out
+ * early when walking the DOM tree.
+ * @example
+ * This div is inert, so none of its children can be focused, even though they
+ * meet our criteria for what is focusable. Once we check the div, we can skip
+ * the rest of the subtree.
+ * ```html
+ * <div inert>
+ *   <button>Button</button>
+ *   <a href="#">Link</a>
+ * </div>
+ * ```
+ */
+function canHaveFocusableChildren(el: HTMLElement) {
+  // The browser will never send focus into a Shadow DOM if the host element
+  // has a negative tabindex. This applies to both slotted Light DOM Shadow DOM
+  // children
+  if (el.shadowRoot && el.getAttribute("tabindex") === "-1") { return false; }
+
+  // Elemments matching this selector are either hidden entirely from the user,
+  // or are visible but unavailable for interaction. Their descentants can never
+  // receive focus.
+  return !el.matches(":disabled,[hidden],[inert]");
+}
+
+function getNextChildEl(el: ParentNode, forward: boolean) {
+  return forward ? el.firstElementChild : el.lastElementChild;
+}
+
+function getNextSiblingEl(el: HTMLElement, forward: boolean) {
+  return forward ? el.nextElementSibling : el.previousElementSibling;
+}
+
+/**
+ * Determine if an element is focusable and has user-visible painted dimensions.
+ */
+export const isUserFocusable = (el: HTMLElement) => {
+  // A shadow host that delegates focus will never directly receive focus,
+  // even with `tabindex=0`. Consider our <fancy-button> custom element, which
+  // delegates focus to its shadow button:
+  //
+  // <fancy-button tabindex="0">
+  //  #shadow-root
+  //  <button><slot></slot></button>
+  // </fancy-button>
+  //
+  // The browser acts as as if there is only one focusable element – the shadow
+  // button. Our library should behave the same way.
+  if (el.shadowRoot?.delegatesFocus) { return false; }
+
+  return el.matches(userFocusableSelectorsString) && !isHidden(el);
+};
+
+/**
+ * Determine if an element is programmatically focusable, without checking if it is actually visible.
+ */
+export const isProgrammaticallyFocusable = (el: HTMLElement, includeHidden = false) => {
+  if (el.shadowRoot?.delegatesFocus) { return false; }
+  return el.matches(allFocusableSelectorsString) && (includeHidden || !isHidden(el));
+};
+
+/**
+ * Determine if an element is hidden from the user.
+ */
+const isHidden = (el: HTMLElement) => {
+  // Browsers hide all non-<summary> descendants of closed <details> elements
+  // from user interaction, but those non-<summary> elements may still match our
+  // focusable-selectors and may still have dimensions, so we need a special
+  // case to ignore them.
+  if (
+    el.matches("details:not([open]) *") &&
+    !el.matches("details>summary:first-of-type")
+  ) { return true; }
+
+  // If this element has no painted dimensions, it's hidden.
+  return !(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+};
+
+const notInert = ":not([inert]):not([inert] *)";
+const notNegTabIndex = ':not([tabindex^="-"])';
+const notDisabled = ":not(:disabled)";
+
+const focusableSelectors = (includeNegativeTabIndexes: boolean) => {
+  const tabIndexPart = includeNegativeTabIndexes ? "" : notNegTabIndex;
+  return [
+    `a[href]${notInert}${tabIndexPart}`,
+    `area[href]${notInert}${tabIndexPart}`,
+    `input:not([type="hidden"]):not([type="radio"])${notInert}${tabIndexPart}${notDisabled}`,
+    `input[type="radio"]${notInert}${tabIndexPart}${notDisabled}`,
+    `select${notInert}${tabIndexPart}${notDisabled}`,
+    `textarea${notInert}${tabIndexPart}${notDisabled}`,
+    `button${notInert}${tabIndexPart}${notDisabled}`,
+    `details${notInert} > summary:first-of-type${tabIndexPart}`,
+    // Discard until Firefox supports `:has()`
+    // See: https://github.com/KittyGiraudel/focusable-selectors/issues/12
+    // `details:not(:has(> summary))${notInert}${tabIndexPart}`,
+    `iframe${notInert}${tabIndexPart}`,
+    `audio[controls]${notInert}${tabIndexPart}`,
+    `video[controls]${notInert}${tabIndexPart}`,
+    `[contenteditable]${notInert}${tabIndexPart}`,
+    `[tabindex]${notInert}${tabIndexPart}`,
+  ];
+};
+
+export const userFocusableSelectorsString = focusableSelectors(false).join(",");
+export const allFocusableSelectorsString = focusableSelectors(true).join(",");
+
+/**
+ * Add this class to a container element to have keyboard-focused children items visually highlighted.
+ */
+export const kbFocusHighlighterClass = "kb-focus-highlighter-group";
+
+export const kbFallbackClass = "kb_fallback_element";
+
+const kbFallbackGroupClass = "kb_fallback_group";
+
+/**
+ * @see kbFallback
+ */
+export const kbFallbackGroup = (alsoUseAsTarget = false): DomElementArg => ([
+  dom.cls(kbFallbackGroupClass),
+  alsoUseAsTarget ? kbFallback() : null,
+]);
+
+/**
+ * Attach a "keyboard fallback" class to an element so that it gets kb focus when another element
+ * in the same container is removed from the dom.
+ *
+ * This is used in combination with kbFallbackGroup and focusFallbackOnDispose when dealing with
+ * focused elements that disappear when triggered.
+ * Without this, clicking an element that disappears on action makes focus jump back to the current panel itself,
+ * or to the body element, making keyboard nav pretty cumbersome in those cases.
+ *
+ * Note: this should not be used to handle "save" or "cancel" or similar buttons in popups and modals where this
+ * "disappearing" case is already handled. This is meant to be used for specific cases, like the "Hide"/"Clear" buttons
+ * in the VisibleFieldsConfig.
+ *
+ * Usage:
+ *   - Use the `kbFallbackGroup` dom arg on a container.
+ *   - Use the `kbFallback` dom arg on an element that should be used as a "keyboard fallback target" in this container.
+ *     As an alternative, the fallback group can be used as the target by passing `true` as its first argument.
+ *   - On a child element of the `kbFallbackGroup`, call `focusFallbackOnDispose()` as a dom argument on elements that
+ *     disappear when triggered.
+ *   - voilà!
+ */
+export const kbFallback = () => dom.cls(kbFallbackClass);
+
+/**
+ * Focus the first `kbFallback()` element found within the closest `kbFallbackGroup` ancestor,
+ * when the element is disposed.
+ *
+ * Focus doesn't move if the disposed element is not the active element.
+ *
+ * @see kbFallback
+ */
+export function focusFallbackOnDispose() {
+  return (el: HTMLElement) => dom.onDisposeElem(el, () => {
+    if (document.activeElement !== el) {
+      return;
+    }
+    const group = el.closest(`.${kbFallbackGroupClass}`);
+    if (group?.classList.contains(kbFallbackClass)) {
+      return (group as HTMLElement).focus({ preventScroll: true });
+    }
+    group?.querySelector<HTMLElement>(`.${kbFallbackClass}`)
+      ?.focus({ preventScroll: true });
+  });
+}
+
+export const isMousetrapIgnoredElement = (el: EventTarget | null): boolean => {
+  if (!(el instanceof HTMLElement) || el.classList.contains("mousetrap")) {
+    return false;
+  }
+  return ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable;
+};

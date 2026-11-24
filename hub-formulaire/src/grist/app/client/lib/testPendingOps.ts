@@ -1,0 +1,73 @@
+/**
+ * Counters for client operations in flight, existing purely so browser tests can wait on a
+ * condition instead of polling a rendered value. Same idea as BaseAPI.numPendingRequests, which
+ * is what makes waitForServer a condition rather than a guess. Named with a test prefix, as the
+ * production code gains nothing from these.
+ *
+ * Keep this a leaf module. App.ts reads the counts and is on the main entry path, so importing the
+ * modules that own these operations would pull their top-level makeT() in ahead of setupLocale and
+ * blank the page.
+ */
+export class TestPendingOps {
+  private _count: number = 0;
+
+  public get count(): number { return this._count; }
+
+  /**
+   * Counts `fn` as in flight until it settles. Increments before calling, so an operation that
+   * starts and then yields is never observed at zero.
+   */
+  public async track<T>(fn: () => Promise<T>): Promise<T> {
+    this._count++;
+    try {
+      return await fn();
+    } finally {
+      this._count--;
+    }
+  }
+
+  /** For promise chains that cannot be wrapped in track(). */
+  public start(): void { this._count++; }
+
+  public end(): void { this._count--; }
+}
+
+/**
+ * Admin panel checks (boot probes), and the install prefs the Backups row also waits on; results
+ * land in observables as they arrive.
+ */
+export const testPendingChecks = new TestPendingOps();
+
+/**
+ * Views scrolling to the cursor. A view scrolls a tick after the cursor moves, and renders the
+ * cursor's row only then. Also counts a scrolly's re-render after its data changes (e.g. a sort),
+ * which likewise happens a tick later.
+ */
+export const testPendingScrolls = new TestPendingOps();
+
+/**
+ * Paste operations. A file paste is an upload followed by a separate addAttachments action, so
+ * in-flight request counts go quiet between the two and look like success.
+ */
+export const testPendingPastes = new TestPendingOps();
+
+/**
+ * Menu items that defer their action to the next tick, so the menu can close first.
+ */
+export const testPendingMenuActions = new TestPendingOps();
+
+/**
+ * Views waiting for data. Moving the cursor in one widget makes the widgets linked to it re-query.
+ */
+export const testPendingViewLoads = new TestPendingOps();
+
+/**
+ * Content that renders once a promise settles, usually code loaded on first use. A panel section
+ * can be missing for a while after its panel opens.
+ */
+export const testPendingAsyncContent = new TestPendingOps();
+
+/**
+ * Chart renders. A chart redraws asynchronously after a debounce, once its data or options change.
+ */
+export const testPendingChartRenders = new TestPendingOps();

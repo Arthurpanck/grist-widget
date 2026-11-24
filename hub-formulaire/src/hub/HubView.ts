@@ -92,7 +92,8 @@ export class HubView extends Disposable {
       deleteFields: keyboardActions.clearValues,
     }, this, this.viewSection.hasRegionFocus);
 
-    // Raccourcis clavier (Mousetrap dans Grist).
+    // Suppr, flèches, Entrée et Tab : liés par les commandes de Grist (Mousetrap). Copier, couper et
+    // coller passent dans Grist par son composant Presse-papiers, propre au document : on les relie ici.
     const onKey = (ev: KeyboardEvent) => {
       const target = ev.target as HTMLElement;
       if (target.closest("input, textarea, select, [contenteditable]")) { return; }
@@ -101,10 +102,6 @@ export class HubView extends Disposable {
       if (mod && ev.key === "c") { run("copy"); }
       else if (mod && ev.key === "x") { run("cut"); }
       else if (mod && ev.key === "v") { run("paste"); }
-      else if (ev.key === "ArrowDown") { run("cursorDown"); }
-      else if (ev.key === "ArrowUp") { run("cursorUp"); }
-      else if (ev.key === "Delete" || ev.key === "Backspace") { run("deleteFields"); }
-      else if (ev.key === "Enter" && this.selectedBox.get()) { run("editField"); }
       else if (ev.key === "Escape") { this.selectedBox.set(null); }
     };
     document.addEventListener("keydown", onKey);
