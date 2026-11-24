@@ -224,6 +224,10 @@ export function uid(prefix = 'b') {
   return prefix + Math.random().toString(36).slice(2, 9);
 }
 
+/** Styles de tuiles proposés ; les anciennes formes « liste » et « pastille » deviennent des blocs icône. */
+export const SHAPES = ['tuile', 'douce', 'aplat', 'bloc'];
+const SHAPE_ALIASES = { liste: 'bloc', pastille: 'bloc', plein: 'aplat' };
+
 export function defaultConfig() {
   return {
     version: VERSION,
@@ -335,7 +339,7 @@ export function normalize(raw) {
       fit: pick(bg.fit, ['cover', 'contain'], 'cover'),
     },
     look: {
-      shape: pick(lk.shape, ['tuile', 'aplat', 'liste', 'pastille'], 'tuile'),
+      shape: pick(SHAPE_ALIASES[lk.shape] || lk.shape, SHAPES, 'tuile'),
       palette: paletteFor(charte, lk.palette),
       size: pick(lk.size, ['s', 'm', 'l'], 'm'),
       align: pick(lk.align, ['left', 'center'], 'left'),
@@ -467,7 +471,7 @@ export const TEMPLATES = [
     description: 'Une ligne compacte, à poser au-dessus d\'un tableau.',
     build: pages => ({
       header: { style: 'none' },
-      look: { shape: 'pastille', palette: 'metropole', size: 's' },
+      look: { shape: 'bloc', palette: 'metropole', size: 's' },
       sections: [newSection({ buttons: pages.slice(0, 8).map(pageButton) })],
     }),
   },
