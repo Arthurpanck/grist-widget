@@ -28,10 +28,8 @@ affichés ; « Vers un site web » ajoute un lien externe.
    - glissez les blocs pour les déplacer.
 4. Un bouton vers un site web affiche son adresse sous son texte, dans l'éditeur seulement ; elle se
    modifie au clic, comme le texte. Un nouveau bouton de ce type ouvre directement sa saisie.
-5. L'icône suit la règle des noms de pages de Grist : un texte qui commence par un emoji
-   (« 📈 Budget ») l'affiche en icône, et le reste en texte. Sans emoji, l'icône dépend de la
-   destination : 📄 page, 📝 formulaire, 🌐 site web. Toutes les tuiles ont le vert du bouton
-   « Envoyer » des formulaires.
+5. L'icône dépend de la destination : 📄 page, 📝 formulaire, 🌐 site web. Toutes les tuiles ont
+   le vert du bouton « Envoyer » des formulaires.
 6. **Terminé** affiche le hub tel que le voient les lecteurs. Les paragraphes, rubriques et colonnes
    passent par le rendu des formulaires publiés de Grist (`FormRenderer`).
 
@@ -47,7 +45,7 @@ cliquez ensuite sur **Enregistrer** dans le menu du widget.
 | **Traductions et icônes de Grist** (`locales/`, `public/grist-icons.css`) | 3 | — |
 | **Remplacés**, car liés au document Grist ouvert : `Forms/FormView` (sert seulement de type) et `Forms/Field` (une question = une colonne de table) | 2 | 4 |
 | **Adapté de grist-core** : `Forms/Menu.ts` (« Nouveau bouton » et ses sous-menus au lieu de « Nouvelle question ») et `Forms/elements.ts` (liste des blocs) | 2 | ≈ 155 |
-| **Propre au hub** (`src/hub/`) : bloc Bouton, vue d'édition (reprend `FormView`), rendu des boutons en lecture, démarrage et liaison avec Grist | 6 | ≈ 740 |
+| **Propre au hub** (`src/hub/`) : bloc Bouton, vue d'édition (reprend `FormView`), rendu des boutons en lecture, démarrage et liaison avec Grist | 6 | ≈ 720 |
 
 Le démarrage (`src/hub/main.ts`) fait ce que fait l'application Grist (`app/client/ui/App.ts`) :
 - `window.gristConfig` ;

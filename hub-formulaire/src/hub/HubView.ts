@@ -129,7 +129,7 @@ export class HubView extends Disposable {
     return cssHubEditor(
       cssToolbar(
         cssToolbarTitle("Modification du hub"),
-        cssToolbarHint("Cliquez sur un bloc pour le sélectionner, puis sur son texte ou son icône pour les modifier. Glissez pour déplacer, clic droit pour plus d'actions."),
+        cssToolbarHint("Cliquez sur un bloc pour le sélectionner, puis sur un texte pour le modifier. Glissez pour déplacer, clic droit pour plus d'actions."),
         primaryButton("Terminé", dom.on("click", () => this._onDone()), dom.cls("test-hub-done")),
       ),
       cssColumns(

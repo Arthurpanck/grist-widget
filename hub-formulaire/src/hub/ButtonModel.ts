@@ -19,7 +19,7 @@ import { theme } from "app/client/ui2018/cssVars";
 import { not } from "app/common/gutil";
 import { Computed, dom, IDomArgs, Observable, styled } from "grainjs";
 import { v4 as uuidv4 } from "uuid";
-import { ButtonData, hubContext, labelOf, splitEmoji } from "./context";
+import { ButtonData, hubContext, labelOf } from "./context";
 import { buttonTile, cssTileDesc, cssTileLabel } from "./tile";
 
 export const BUTTON_KEYS = ["label", "description", "kind", "page", "form", "url"] as const;
@@ -75,9 +75,7 @@ export class ButtonModel extends BoxModel {
         use(hubContext.pages); use(hubContext.forms);
         const data = this.data(use);
         return buttonTile(data, "div", {
-          // Affiché sans l'emoji de tête (il est l'icône), modifié avec : « 📈 Budget ».
-          label: this._text("label", this.edit, labelOf(data), cssTileLabel, "📈 Texte du bouton",
-            [splitEmoji(data.label?.trim() || "").emoji, labelOf(data)].filter(Boolean).join(" ")),
+          label: this._text("label", this.edit, labelOf(data), cssTileLabel, "Texte du bouton"),
           description: [
             this._text("description", this.editDescription, data.description || "", cssTileDesc,
               "Ajouter une description"),
@@ -97,12 +95,12 @@ export class ButtonModel extends BoxModel {
    * sélectionné. La seule différence : on enregistre dans le bloc au lieu de la colonne de la table.
    */
   private _text(key: "label" | "description" | "url", edit: Observable<boolean>, shown: string,
-                look: typeof cssTileLabel, placeholder: string, editValue = shown) {
+                look: typeof cssTileLabel, placeholder: string) {
     return dom.domComputed(edit, (editing) => {
       if (editing) {
         // Brouillon non libéré avec la zone de texte (comme Paragraph.ts) : à sa suppression, celle-ci
         // émet encore « change » et y écrit.
-        const draft = Observable.create(null, editValue);
+        const draft = Observable.create(null, shown);
         return look(cssInlineEdit(css.cssEditableLabel(draft, { onInput: true },
           { placeholder, rows: "1" },
           css.saveControls(edit, (ok) => {
