@@ -25,6 +25,13 @@
 html, body { margin: 0; min-height: 100%; }
 body { background: var(--wa-color-surface-lowered); }
 
+/* L'interface d'édition en charte DSFR */
+.charte-dsfr {
+  --wa-color-brand-fill-loud: #000091;
+  --wa-color-brand-border-loud: #000091;
+}
+.charte-dsfr .sec__num { --ui-accent: #000091; }
+
 /* 2. Le hub -------------------------------------------------------- */
 
 .hub {
@@ -32,7 +39,13 @@ body { background: var(--wa-color-surface-lowered); }
   --hub-max: 75rem;
   --tile-min: 15rem;
   --icon: 2.75rem;
-  --title: var(--ml-blue);
+  /* Variables de charte (Métropole par défaut, DSFR plus bas) */
+  --ch-title: var(--ml-blue);
+  --ch-accent: var(--ml-red);
+  --ch-accent-2: var(--ml-red-dark);
+  --ch-band: var(--ml-red);
+  --ch-radius: var(--wa-border-radius-m);
+  --title: var(--ch-title);
   min-height: 100%;
   background-color: var(--hub-canvas);
   background-position: center;
@@ -74,19 +87,19 @@ body { background: var(--wa-color-surface-lowered); }
   width: 3.5rem;
   height: var(--wa-space-2xs);
   margin-top: var(--wa-space-s);
-  background: var(--ml-red);
+  background: var(--ch-accent);
 }
 .hub__head--center .hub__title::after { margin-inline: auto; }
 
 .hub__band--encadre .hub__head {
   padding: var(--wa-space-l) var(--wa-space-xl);
   background: var(--wa-color-surface-raised);
-  border-inline-start: var(--wa-space-2xs) solid var(--ml-red);
-  border-radius: var(--wa-border-radius-m);
+  border-inline-start: var(--wa-space-2xs) solid var(--ch-accent);
+  border-radius: var(--ch-radius);
   box-shadow: var(--wa-shadow-s);
 }
 
-.hub__band--bandeau { padding-block: var(--wa-space-xl); background: var(--ml-red); }
+.hub__band--bandeau { padding-block: var(--wa-space-xl); background: var(--ch-band); }
 .hub__band--bandeau .hub__title,
 .hub__band--bandeau .hub__subtitle { color: var(--ml-white); }
 .hub__band--bandeau .hub__logo { padding: var(--wa-space-2xs) var(--wa-space-s); background: var(--ml-white); border-radius: var(--wa-border-radius-s); }
@@ -110,8 +123,8 @@ body { background: var(--wa-color-surface-lowered); }
   font-weight: var(--wa-font-weight-heading);
   color: var(--title);
 }
-.hub__section-title::before { content: ''; width: var(--wa-space-2xs); height: 1.1em; background: var(--ml-red); }
-.hub__section:nth-child(even) .hub__section-title::before { background: var(--ml-red-dark); }
+.hub__section-title::before { content: ''; width: var(--wa-space-2xs); height: 1.1em; background: var(--ch-accent); }
+.hub__section:nth-child(even) .hub__section-title::before { background: var(--ch-accent-2); }
 .hub--align-center .hub__section-title { justify-content: center; }
 .hub__footer { color: var(--wa-color-text-quiet); font-size: var(--wa-font-size-s); white-space: pre-line; }
 .hub--align-center .hub__footer { text-align: center; }
@@ -123,7 +136,7 @@ body { background: var(--wa-color-surface-lowered); }
 .hub--image.hub--on-dark .hub__band--sobre,
 .hub--image.hub--on-dark .hub__section-title,
 .hub--image.hub--on-dark .hub__footer { text-shadow: 0 1px 3px rgb(0 0 0 / 0.45); }
-.hub--on-dark .hub__band--encadre { --title: var(--ml-blue); }
+.hub--on-dark .hub__band--encadre { --title: var(--ch-title); }
 
 /* Grilles selon la forme des boutons */
 .hub__grid { display: grid; gap: var(--wa-space-m); grid-template-columns: repeat(auto-fill, minmax(var(--tile-min), 1fr)); }
@@ -178,7 +191,7 @@ body { background: var(--wa-color-surface-lowered); }
   padding-top: calc(var(--wa-space-l) + var(--wa-space-3xs));
   background: var(--wa-color-surface-raised);
   border: var(--wa-border-width-s) solid var(--wa-color-surface-border);
-  border-radius: var(--wa-border-radius-m);
+  border-radius: var(--ch-radius);
   box-shadow: var(--wa-shadow-s);
   overflow: hidden;
 }
@@ -197,7 +210,7 @@ body { background: var(--wa-color-surface-lowered); }
   padding: var(--wa-space-l);
   background: var(--c);
   color: var(--c-on);
-  border-radius: var(--wa-border-radius-m);
+  border-radius: var(--ch-radius);
   box-shadow: var(--wa-shadow-s);
 }
 .hub--aplat .hub-btn__icon { width: auto; height: auto; place-items: start; background: none; color: inherit; font-size: calc(var(--icon) * 0.7); }
@@ -214,7 +227,7 @@ body { background: var(--wa-color-surface-lowered); }
   background: var(--wa-color-surface-raised);
   border: var(--wa-border-width-s) solid var(--wa-color-surface-border);
   border-inline-start: var(--wa-space-2xs) solid var(--c);
-  border-radius: var(--wa-border-radius-m);
+  border-radius: var(--ch-radius);
 }
 .hub--liste .hub-btn__go { align-self: center; }
 
@@ -233,6 +246,43 @@ body { background: var(--wa-color-surface-lowered); }
 .hub--pastille .hub-btn__desc,
 .hub--pastille .hub-btn__go { display: none; }
 .hub--pastille .hub-btn--no-icon { padding-inline-start: var(--wa-space-m); }
+
+/* Charte DSFR (Système de design de l'État) : formes droites, Bleu France, tuiles à liseré bas */
+.hub--dsfr {
+  --ch-title: #161616;
+  --ch-accent: #000091;
+  --ch-accent-2: #000091;
+  --ch-band: #000091;
+  --ch-radius: 0;
+  --hub-canvas: #F6F6F6;
+  font-family: 'Marianne', arial, sans-serif;
+}
+.wa-dark .hub--dsfr { --ch-title: var(--wa-color-text-normal); --hub-canvas: var(--wa-color-surface-lowered); }
+.hub--dsfr .hub__title { font-weight: 700; }
+.hub--dsfr .hub__band--sobre .hub__title::after { display: none; }
+.hub--dsfr .hub__band--encadre .hub__head { background: #E3E3FD; border-inline-start-color: #6A6AF4; box-shadow: none; }
+.wa-dark .hub--dsfr .hub__band--encadre .hub__head { background: var(--wa-color-surface-raised); }
+.hub--dsfr .hub__section-title::before { display: none; }
+.hub--dsfr .hub-btn,
+.hub--dsfr .hub-btn:hover { box-shadow: none; transform: none; }
+.hub--dsfr .hub-btn:focus-visible { outline: 2px solid #0A76F6; outline-offset: 2px; }
+.hub--dsfr.hub--tuile .hub-btn {
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--wa-color-surface-border), inset 0 calc(-1 * var(--wa-space-2xs)) 0 0 var(--c);
+}
+.hub--dsfr.hub--tuile .hub-btn::before { display: none; }
+.hub--dsfr.hub--tuile .hub-btn:hover { background: var(--wa-color-surface-lowered); box-shadow: inset 0 0 0 1px var(--wa-color-surface-border), inset 0 calc(-1 * var(--wa-space-2xs)) 0 0 var(--c); }
+.hub--dsfr.hub--tuile .hub-btn__icon,
+.hub--dsfr.hub--liste .hub-btn__icon { background: none; color: var(--c); font-size: calc(var(--icon) * 0.75); place-items: start; }
+.hub--dsfr.hub--tuile .hub-btn__label,
+.hub--dsfr.hub--liste .hub-btn__label { color: #000091; font-weight: 700; }
+.wa-dark .hub--dsfr.hub--tuile .hub-btn__label,
+.wa-dark .hub--dsfr.hub--liste .hub-btn__label { color: #8585F6; }
+.hub--dsfr.hub--tuile .hub-btn__go,
+.hub--dsfr.hub--liste .hub-btn__go { color: #000091; }
+.hub--dsfr.hub--liste .hub-btn { border: 0; border-inline-start: var(--wa-space-2xs) solid var(--c); box-shadow: inset 0 0 0 1px var(--wa-color-surface-border); }
+.hub--dsfr.hub--pastille .hub-btn { border-radius: 0; padding: var(--wa-space-xs) var(--wa-space-m); }
+.hub--dsfr.hub--pastille .hub-btn__icon { background: none; width: auto; height: auto; }
 
 /* Survol, problèmes, mode édition */
 .hub--tuile .hub-btn:hover,
@@ -298,12 +348,13 @@ body:hover .floating--top, .floating--top:focus-within { opacity: 1; }
 .sec__head { display: flex; align-items: center; gap: var(--wa-space-2xs); }
 .sec__head wa-input { flex: 1; }
 .sec__num {
+  --ui-accent: var(--ml-red);
   display: grid;
   place-items: center;
   min-width: 1.4rem;
   height: 1.4rem;
   border-radius: var(--wa-border-radius-s);
-  background: var(--ml-red);
+  background: var(--ui-accent);
   color: var(--ml-white);
   font-size: var(--wa-font-size-2xs);
   font-weight: var(--wa-font-weight-semibold);

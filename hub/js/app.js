@@ -7,7 +7,7 @@ import { createApp, reactive, computed, ref, watch, Sortable, registerIconLibrar
 import * as C from './config.js';
 import * as G from './grist.js';
 
-export const APP_VERSION = '2.0.1';
+export const APP_VERSION = '2.1.0';
 console.info(`Hub de navigation ${APP_VERSION}`);
 
 // Icônes Lucide pour tous les <wa-icon> (les icônes internes de Web Awesome restent les siennes).
@@ -109,7 +109,7 @@ const HubView = {
           id: s.id,
           title: s.title,
           number: s.title ? ++number : 0,
-          items: s.buttons.map(b => ({ b, label: labelOf(b), color: C.colorOf(b, index++, c.look.palette), link: linkOf(c, b) })),
+          items: s.buttons.map(b => ({ b, label: labelOf(b), color: C.colorOf(b, index++, c), link: linkOf(c, b) })),
         }));
       const bg = c.background;
       const image = bg.type === 'image' ? (bg.image || C.DEFAULT_IMAGE) : '';
@@ -249,6 +249,7 @@ const EditorPanel = {
       const base = clone(store.draft);
       return C.normalize({
         ...base,
+        charte: patch.charte || base.charte,
         header: { ...base.header, style: 'none', ...(patch.header || {}) },
         background: { ...base.background, ...(patch.background || {}) },
         look: { ...base.look, columns: 0, ...(patch.look || {}) },
@@ -260,13 +261,24 @@ const EditorPanel = {
     const choices = computed(() => ({
       shape: [['tuile', 'Tuiles'], ['aplat', 'Aplats'], ['liste', 'Liste'], ['pastille', 'Pastilles']]
         .map(([value, label]) => ({ value, label, preview: preview({ look: { shape: value }, background: { type: 'default' } }) })),
-      palette: Object.entries(C.PALETTES)
-        .map(([value, p]) => ({ value, label: p.label, hint: p.hint, swatches: p.cycle.map(id => C.COLORS[id].bg) })),
+      charte: Object.entries(C.CHARTES)
+        .map(([value, ch]) => ({ value, label: ch.label, hint: ch.hint, preview: preview({ charte: value, look: { palette: ch.palette }, header: { style: 'sobre', title: 'Accueil' }, background: { type: 'default' }, buttons: 2 }) })),
+      palette: Object.entries(C.charteOf(store.draft).palettes)
+        .map(([value, p]) => ({ value, label: p.label, hint: p.hint, swatches: p.cycle.map(id => C.charteOf(store.draft).colors[id].bg) })),
       header: [['none', 'Aucun'], ['sobre', 'Sobre'], ['encadre', 'Encadré'], ['bandeau', 'Bandeau']]
         .map(([value, label]) => ({ value, label, preview: preview({ header: { style: value, title: store.draft.header.title || 'Titre du hub', subtitle: '' }, background: { type: 'default' }, buttons: 2 }) })),
       background: [['default', 'Par défaut'], ['color', 'Couleur'], ['image', 'Image']]
         .map(([value, label]) => ({ value, label, preview: preview({ background: { type: value }, buttons: 2 }) })),
     }));
+
+    // Changer de charte conserve l'intention de la palette (unie, alternée, multicolore).
+    function setCharte(charte) {
+      store.draft.charte = charte;
+      store.draft.look.palette = C.paletteFor(charte, store.draft.look.palette);
+      if (!C.CHARTES[charte].backgrounds.includes(store.draft.background.color)) {
+        store.draft.background.color = C.CHARTES[charte].backgrounds[0];
+      }
+    }
 
     async function importImage(event, apply, logo) {
       const file = event.target.files?.[0];
@@ -308,7 +320,8 @@ const EditorPanel = {
       store, d, missingPages, addMissing, addSection, sectionAction, buttonAction, onMove, choices,
       importImage, importText, importConfig, reset, exportJson, docBaseHint,
       openButton, labelOf, describeLink, linkOf, isIconName, colorOf: C.colorOf, flatIndex,
-      backgroundColors: C.BACKGROUND_COLORS,
+      backgroundColors: computed(() => C.charteOf(store.draft).backgrounds),
+      setCharte,
       version: APP_VERSION,
     };
   },
@@ -355,8 +368,9 @@ const ButtonDialog = {
     const preview = computed(() => {
       const draft = store.draft;
       const index = store.dialog.isNew ? C.allButtons(draft).length : flatIndex(f.value.id);
-      const cycle = C.PALETTES[draft.look.palette].cycle;
-      const button = { ...f.value, color: f.value.color === 'auto' ? cycle[index % cycle.length] : f.value.color };
+      const color = C.colorOf(f.value, index, draft);
+      const id = Object.keys(C.charteOf(draft).colors).find(k => C.charteOf(draft).colors[k] === color);
+      const button = { ...f.value, color: id };
       return C.normalize({ ...draft, header: { style: 'none' }, background: { type: 'default' }, footer: '',
         look: { ...draft.look, align: 'left', columns: 1 }, sections: [{ id: 'apercu', title: '', buttons: [button] }] });
     });
@@ -396,13 +410,15 @@ const ButtonDialog = {
       if (event.target === event.currentTarget) { store.dialog = null; }
     }
 
-    const colors = computed(() => [['auto', 'Automatique']].concat(Object.entries(C.COLORS).map(([id, c]) => [id, c.label])));
+    const chartColors = computed(() => C.charteOf(store.draft).colors);
+    const colors = computed(() => [['auto', 'Automatique']].concat(Object.entries(chartColors.value).map(([id, c]) => [id, c.label])));
     const autoGradient = computed(() => {
-      const cycle = C.PALETTES[store.draft.look.palette].cycle.map(id => C.COLORS[id].bg);
+      const ch = C.charteOf(store.draft);
+      const cycle = ch.palettes[store.draft.look.palette].cycle.map(id => ch.colors[id].bg);
       return `conic-gradient(${cycle.map((c, i) => `${c} ${(i / cycle.length) * 100}% ${((i + 1) / cycle.length) * 100}%`).join(', ')})`;
     });
 
-    return { store, f, pages, pageQuery, icons, iconQuery, error, tried, preview, setKind, choosePage, save, remove, onHide, colors, autoGradient, COLORS: C.COLORS, isIconName };
+    return { store, f, pages, pageQuery, icons, iconQuery, error, tried, preview, setKind, choosePage, save, remove, onHide, colors, autoGradient, chartColors, isIconName };
   },
 };
 
@@ -510,6 +526,14 @@ const App = {
       store.confirm?.resolve(value);
       store.confirm = null;
     }
+
+    // L'interface (boutons, onglets…) prend la couleur principale de la charte affichée.
+    watch(() => config.value && config.value.charte, charte => {
+      const root = document.documentElement.classList;
+      root.toggle('charte-dsfr', charte === 'dsfr');
+      root.toggle('wa-brand-blue', charte === 'dsfr');
+      root.toggle('wa-brand-red', charte !== 'dsfr');
+    }, { immediate: true });
 
     const media = window.matchMedia('(max-width: 720px)');
     const syncNarrow = () => { store.narrow = media.matches; };

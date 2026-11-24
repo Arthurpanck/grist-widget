@@ -31,12 +31,58 @@ export const PALETTES = {
   multicolore: { label: 'Multicolore', hint: 'Une couleur par bouton', cycle: ['rouge-fonce', 'bleu', 'canard', 'vert-fonce', 'ambre', 'violet'] },
 };
 
-export const BACKGROUND_COLORS = ['#F4F4F6', '#FFFFFF', '#FFF5F5', '#EEF3F3', '#2A3158', '#C00000'];
+/* ------------------------------------------------------------------ */
+/* Couleurs du Système de design de l'État (DSFR)                      */
+/* ------------------------------------------------------------------ */
 
-export function colorOf(button, index, palette) {
-  if (button.color && COLORS[button.color]) { return COLORS[button.color]; }
-  const cycle = (PALETTES[palette] || PALETTES.metropole).cycle;
-  return COLORS[cycle[index % cycle.length]];
+export const DSFR_COLORS = {
+  'bleu-france': { label: 'Bleu France', bg: '#000091', fg: '#FFFFFF' },
+  'rouge-marianne': { label: 'Rouge Marianne', bg: '#E1000F', fg: '#FFFFFF' },
+  ecume: { label: 'Écume', bg: '#465F9D', fg: '#FFFFFF' },
+  cumulus: { label: 'Cumulus', bg: '#417DC4', fg: '#FFFFFF' },
+  menthe: { label: 'Menthe', bg: '#009081', fg: '#FFFFFF' },
+  emeraude: { label: 'Émeraude', bg: '#00A95F', fg: '#161616' },
+  bourgeon: { label: 'Bourgeon', bg: '#68A532', fg: '#161616' },
+  tournesol: { label: 'Tournesol', bg: '#C8AA39', fg: '#161616' },
+  'terre-battue': { label: 'Terre battue', bg: '#E4794A', fg: '#161616' },
+  glycine: { label: 'Glycine', bg: '#A558A0', fg: '#FFFFFF' },
+  'cafe-creme': { label: 'Café crème', bg: '#D1B781', fg: '#161616' },
+  gris: { label: 'Gris', bg: '#666666', fg: '#FFFFFF' },
+};
+
+export const DSFR_PALETTES = {
+  bleu: { label: 'Bleu France', hint: 'Couleur principale de l\'État', cycle: ['bleu-france'] },
+  marianne: { label: 'Bleu et rouge', hint: 'Bleu France et Rouge Marianne alternés', cycle: ['bleu-france', 'rouge-marianne'] },
+  froid: { label: 'Tons froids', hint: 'Couleurs illustratives bleues et vertes', cycle: ['ecume', 'menthe', 'cumulus', 'emeraude'] },
+  illustratif: { label: 'Illustratif', hint: 'Une couleur illustrative par bouton', cycle: ['ecume', 'menthe', 'glycine', 'terre-battue', 'tournesol', 'cumulus'] },
+};
+
+/** Chartes graphiques disponibles : couleurs, palettes et fonds proposés. */
+export const CHARTES = {
+  metropole: { label: 'Métropole de Lyon', hint: 'Rouges et bleu de la Métropole', colors: COLORS, palettes: PALETTES, palette: 'metropole',
+    backgrounds: ['#F4F4F6', '#FFFFFF', '#FFF5F5', '#EEF3F3', '#2A3158', '#C00000'] },
+  dsfr: { label: 'DSFR (État)', hint: 'Système de design de l\'État', colors: DSFR_COLORS, palettes: DSFR_PALETTES, palette: 'bleu',
+    backgrounds: ['#F6F6F6', '#FFFFFF', '#F5F5FE', '#E3E3FD', '#000091', '#161616'] },
+};
+
+// Palette équivalente quand on change de charte.
+const PALETTE_EQUIV = { metropole: 'bleu', institutionnel: 'bleu', contraste: 'marianne', multicolore: 'illustratif',
+  bleu: 'metropole', marianne: 'contraste', froid: 'institutionnel', illustratif: 'multicolore' };
+
+export function paletteFor(charte, palette) {
+  const ch = CHARTES[charte] || CHARTES.metropole;
+  if (ch.palettes[palette]) { return palette; }
+  return ch.palettes[PALETTE_EQUIV[palette]] ? PALETTE_EQUIV[palette] : ch.palette;
+}
+
+export const charteOf = cfg => CHARTES[cfg && cfg.charte] || CHARTES.metropole;
+
+/** Couleur d'un bouton : la sienne, ou celle de la palette selon son rang (« Automatique »). */
+export function colorOf(button, index, cfg) {
+  const ch = charteOf(cfg);
+  if (button.color && ch.colors[button.color]) { return ch.colors[button.color]; }
+  const cycle = (ch.palettes[cfg.look.palette] || ch.palettes[ch.palette]).cycle;
+  return ch.colors[cycle[index % cycle.length]];
 }
 
 export function isDark(hex) {
@@ -181,6 +227,7 @@ export function uid(prefix = 'b') {
 export function defaultConfig() {
   return {
     version: VERSION,
+    charte: 'metropole',
     header: { style: 'sobre', title: 'Portail du document', subtitle: '', logo: '', align: 'left' },
     background: { type: 'default', color: '#F4F4F6', image: '', veil: 0.4, tone: 'dark', fit: 'cover' },
     look: { shape: 'tuile', palette: 'metropole', size: 'm', align: 'left', columns: 0 },
@@ -217,14 +264,14 @@ const V1_ICONS = {
   externe: 'external-link', reglages: 'settings', nature: 'leaf', transport: 'bus', grille: 'layout-grid', fleche: 'arrow-right',
 };
 
-function normalizeButton(b) {
+function normalizeButton(b, colors) {
   const icon = str(b.icon);
   return {
     id: str(b.id) || uid('b'),
     label: str(b.label),
     description: str(b.description),
     icon: V1_ICONS[icon] || icon,
-    color: COLORS[b.color] ? b.color : 'auto',
+    color: colors[b.color] ? b.color : 'auto',
     kind: pick(b.kind, ['page', 'url'], 'page'),
     page: Number(b.page) > 0 ? Number(b.page) : null,
     url: str(b.url),
@@ -267,8 +314,11 @@ export function normalize(raw) {
   if (!raw || typeof raw !== 'object') { return d; }
   if (!raw.version || raw.version < 2 || (!raw.sections && Array.isArray(raw.buttons))) { raw = migrateV1(raw); }
   const hd = raw.header || {}, bg = raw.background || {}, lk = raw.look || {};
+  const charte = pick(raw.charte, Object.keys(CHARTES), 'metropole');
+  const ch = CHARTES[charte];
   return {
     version: VERSION,
+    charte,
     header: {
       style: pick(hd.style, ['none', 'sobre', 'encadre', 'bandeau'], d.header.style),
       title: str(hd.title),
@@ -286,7 +336,7 @@ export function normalize(raw) {
     },
     look: {
       shape: pick(lk.shape, ['tuile', 'aplat', 'liste', 'pastille'], 'tuile'),
-      palette: pick(lk.palette, Object.keys(PALETTES), 'metropole'),
+      palette: paletteFor(charte, lk.palette),
       size: pick(lk.size, ['s', 'm', 'l'], 'm'),
       align: pick(lk.align, ['left', 'center'], 'left'),
       columns: Math.round(num(lk.columns, 0, 6, 0)),
@@ -294,7 +344,7 @@ export function normalize(raw) {
     sections: (Array.isArray(raw.sections) ? raw.sections : []).filter(s => s && typeof s === 'object').map(s => ({
       id: str(s.id) || uid('s'),
       title: str(s.title),
-      buttons: (Array.isArray(s.buttons) ? s.buttons : []).filter(b => b && typeof b === 'object').map(normalizeButton),
+      buttons: (Array.isArray(s.buttons) ? s.buttons : []).filter(b => b && typeof b === 'object').map(b => normalizeButton(b, ch.colors)),
     })),
     footer: str(raw.footer),
     numbering: raw.numbering !== false,
