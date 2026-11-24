@@ -6,7 +6,8 @@ par bouton, et toute l'apparence se règle à partir de miniatures. Le widget ap
 Métropole de Lyon** :
 - rouges `#FF0000` / `#C00000`, bleu `#2A3158` ;
 - police Segoe UI ;
-- rubriques numérotées « 1 - … ».
+- tuiles « Bloc icône » ;
+- titres soulignés de rouge.
 
 | 1. Choisir un modèle | 2. Ajuster le contenu |
 |---|---|
@@ -20,21 +21,29 @@ Exemple de résultat (modèle « Accueil visuel ») :
 
 ## Utilisation
 
-Tout se fait sur la page elle-même, bouton après bouton.
+Tout se fait sur la page elle-même. Un hub neuf commence par un titre et une rubrique vides.
 
-1. **Créer.** À la fin de chaque rubrique, une case « Ajouter un bouton » attend à l'endroit où le bouton apparaîtra.
-   Elle contient un seul champ, « Vers où mène ce bouton ? » :
+1. **Créer un bouton.** À la fin de chaque rubrique, une case « Ajouter un bouton » attend à l'endroit où le
+   bouton apparaîtra. Elle contient un seul champ, « Vers où mène ce bouton ? » :
    - on tape le nom d'une page (les pages sans bouton sont proposées en premier) ou on colle une adresse web ;
    - **Entrée** crée le bouton, avec son nom et une icône devinée ;
    - le champ reste ouvert pour le bouton suivant ; **Échap** le referme.
-2. **Modifier.** Un clic sur un bouton ouvre sa fiche, juste à côté : nom, destination (« Changer »), icône,
-   couleur, description, Supprimer. Chaque modification s'affiche aussitôt.
-3. **Déplacer.** On glisse un bouton pour changer sa place, y compris vers une autre rubrique. Les titres de rubrique
-   se modifient sur place ; « Ajouter une rubrique » en crée une nouvelle.
-4. **Titre.** Le titre et le sous-titre de la page se modifient directement en haut du hub.
+2. **Modifier un bouton.** Un clic sur un bouton ouvre sa fiche, juste à côté :
+   - nom, description, destination (« Changer »), icône ;
+   - couleur : celle de la charte Métropole, ou une des 8 pastilles de la palette Metabase.
+
+   La **petite croix** en haut à droite d'un bouton le supprime.
+3. **Composer la page.** En bas du hub, « Ajouter : **Titre** · **Sous-titre** · **Rubrique de boutons** ».
+   - Les titres se modifient sur place.
+   - La corbeille d'un bloc le supprime.
+   - Les titres, sous-titres et rubriques vides sont retirés en fin d'édition.
+4. **Déplacer.** On glisse un bouton pour changer sa place, y compris vers une autre rubrique. On glisse un titre,
+   un sous-titre ou une rubrique par sa poignée (⋮⋮, à gauche).
 5. **Afficher.** Le bouton « Affichage » ouvre un panneau à droite, le hub restant visible :
-   style des tuiles (Classique, Douce, Aplat, Bloc icône), couleurs de la charte, image de fond (adresse ou photo
-   importée, avec un voile réglable) et disposition (taille, alignement, colonnes).
+   - image de fond (adresse ou photo importée, avec un voile réglable) ;
+   - disposition (taille, alignement, colonnes).
+
+   Sans image, le fond « Halo métropolitain » est utilisé.
 
 Un hub vide propose « Ajouter le premier bouton », ou de partir d'un modèle. Les lecteurs seuls ne voient jamais
 les outils d'édition ; le hub suit le thème clair ou sombre de Grist et s'adapte au mobile.

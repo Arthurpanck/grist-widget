@@ -9,11 +9,11 @@
  *  2. modifier — un clic sur un bouton ouvre sa fiche à côté de lui ; on le glisse pour le déplacer ;
  *  3. afficher — le panneau « Affichage » règle forme, couleurs, en-tête et fond.
  */
-import { createApp, reactive, computed, ref, watch, onMounted, Sortable, registerIconLibrary, LUCIDE } from './libs.js';
+import { createApp, reactive, computed, ref, watch, onMounted, nextTick, Sortable, registerIconLibrary, LUCIDE } from './libs.js';
 import * as C from './config.js';
 import * as G from './grist.js';
 
-export const APP_VERSION = '3.1.0';
+export const APP_VERSION = '3.2.0';
 console.info(`Hub de navigation ${APP_VERSION}`);
 
 // Icônes Lucide pour tous les <wa-icon> (les icônes internes de Web Awesome restent les siennes).
@@ -67,10 +67,10 @@ function ask(options) {
 
 const pageOf = viewRef => store.pages.find(p => p.viewRef === viewRef);
 const isIconName = icon => /^[a-z0-9-]+$/.test(icon || '');
-const sectionOf = id => store.draft.sections.find(s => s.id === id);
+const sectionOf = id => store.draft.blocks.find(b => b.id === id && b.type === 'section');
 
 function findButton(id) {
-  for (const section of store.draft.sections) {
+  for (const section of C.sectionsOf(store.draft)) {
     const index = section.buttons.findIndex(b => b.id === id);
     if (index >= 0) { return { section, index, button: section.buttons[index] }; }
   }
@@ -130,32 +130,25 @@ const HubView = {
   template: '#tpl-hub',
   props: { config: Object, mode: { type: String, default: 'view' } },
   setup(props) {
+    const editing = computed(() => props.mode === 'edit');
+
     const m = computed(() => {
       const c = props.config;
       let index = 0;
-      const sections = c.sections
-        .filter(s => s.buttons.length || props.mode === 'edit')
-        .map(s => ({
-          id: s.id,
-          title: s.title,
-          items: s.buttons.map(b => ({ b, label: labelOf(b), color: C.colorOf(b, index++, c), link: linkOf(c, b) })),
-        }));
+      const blocks = c.blocks
+        .map(blk => (blk.type === 'section'
+          ? { ...blk, items: blk.buttons.map(b => ({ b, label: labelOf(b), color: C.colorOf(b, index++, c), link: linkOf(c, b) })) }
+          : blk))
+        // En lecture, on masque les titres vides et les rubriques sans bouton.
+        .filter(blk => editing.value || (blk.type === 'section' ? blk.items.length : blk.text.trim()));
       const bg = c.background;
       const image = bg.type === 'image' ? (bg.image || C.DEFAULT_IMAGE) : '';
-      return {
-        c,
-        sections,
-        image,
-        onDark: (image && bg.tone === 'dark' && bg.veil >= 0.2) || (bg.type === 'color' && C.isDark(bg.color)),
-        hasHeader: props.mode === 'edit' || (c.header.style !== 'none' && Boolean(c.header.title || c.header.subtitle || c.header.logo)),
-        headerStyle: props.mode === 'edit' && c.header.style === 'none' ? 'sobre' : c.header.style,
-      };
+      return { c, blocks, image, onDark: Boolean(image && bg.tone === 'dark' && bg.veil >= 0.2) };
     });
 
     const rootStyle = computed(() => {
       const bg = m.value.c.background;
       const style = {};
-      if (bg.type === 'color') { style['--hub-canvas'] = bg.color; }
       if (m.value.image) {
         const veil = bg.tone === 'dark' ? `rgba(20, 22, 40, ${bg.veil})` : `rgba(255, 255, 255, ${bg.veil})`;
         style.backgroundImage = `linear-gradient(${veil}, ${veil}), url(${JSON.stringify(m.value.image)})`;
@@ -168,48 +161,62 @@ const HubView = {
     const tagOf = item => (props.mode === 'view' && item.link.href ? 'a' : props.mode === 'static' ? 'div' : 'button');
 
     function click(event, item) {
-      if (props.mode === 'edit') {
+      if (editing.value) {
         if (Date.now() - lastDrag < 300) { return; }   // fin d'un glisser-déposer, pas un clic
         store.ghost = null;
         store.editId = item.b.id;
       } else if (props.mode === 'view' && !item.link.href) {
         notify(item.link.missingBase
-          ? 'Adresse du document inconnue : accordez l\'accès complet au widget, ou renseignez l\'adresse du document dans les réglages du hub.'
+          ? 'Adresse du document inconnue : accordez l\'accès complet au widget.'
           : `${item.label} : ${item.link.problem.toLowerCase()}.`, 'warning');
       }
     }
 
-    // Glisser-déposer des boutons, y compris d'une rubrique à l'autre (mode édition uniquement).
-    const sortable = computed(() => (props.mode !== 'edit' ? null : {
+    // Glisser-déposer : les blocs (titres, sous-titres, rubriques) par leur poignée,
+    // et les boutons, y compris d'une rubrique à l'autre.
+    const blockSort = computed(() => (!editing.value ? null : {
+      group: 'hub-blocks', draggable: '.hub-block', handle: '.hub-block__handle',
+      onMove({ oldIndex, newIndex }) {
+        const list = store.draft.blocks;
+        list.splice(newIndex, 0, list.splice(oldIndex, 1)[0]);
+      },
+    }));
+    const buttonSort = computed(() => (!editing.value ? null : {
+      group: 'hub-buttons', draggable: '.hub-cell', filter: '.hub-adder, .hub-cell__remove',
       onMove({ from, to, oldIndex, newIndex }) {
         const [b] = sectionOf(from).buttons.splice(oldIndex, 1);
         sectionOf(to).buttons.splice(newIndex, 0, b);
       },
     }));
 
-    function addSection() {
-      const s = C.newSection();
-      store.draft.sections.push(s);
+    function addBlock(type) {
+      const blk = C.newBlock(type);
+      store.draft.blocks.push(blk);
       store.editId = null;
-      store.ghost = s.id;
+      store.ghost = type === 'section' ? blk.id : null;
+      if (type !== 'section') {
+        nextTick(() => document.querySelector(`[data-block-input="${blk.id}"]`)?.focus());
+      }
     }
 
-    async function removeSection(id) {
-      const s = sectionOf(id);
-      const n = s.buttons.length;
+    async function removeBlock(id) {
+      const blocks = store.draft.blocks;
+      const blk = blocks.find(b => b.id === id);
+      const n = blk.type === 'section' ? blk.buttons.length : 0;
       if (n && !(await ask({ label: 'Supprimer la rubrique ?', text: `Ses ${n} bouton${n > 1 ? 's' : ''} seront supprimés.`, ok: 'Supprimer' }))) { return; }
-      store.draft.sections.splice(store.draft.sections.indexOf(s), 1);
+      blocks.splice(blocks.indexOf(blk), 1);
     }
 
-    const setTitle = (id, title) => { sectionOf(id).title = title; };
-
-    // Titre et sous-titre de la page, modifiables sur place.
-    function setHeader(field, value) {
-      store.draft.header[field] = value;
-      if (store.draft.header.style === 'none' && value) { store.draft.header.style = 'sobre'; }
+    function removeButton(id) {
+      const found = findButton(id);
+      if (!found) { return; }
+      found.section.buttons.splice(found.index, 1);
+      if (store.editId === id) { store.editId = null; }
     }
 
-    return { m, rootStyle, tagOf, click, sortable, addSection, removeSection, setTitle, setHeader, isIconName, store };
+    const setText = (id, text) => { store.draft.blocks.find(b => b.id === id).text = text; };
+
+    return { m, editing, rootStyle, tagOf, click, blockSort, buttonSort, addBlock, removeBlock, removeButton, setText, isIconName, store };
   },
 };
 
@@ -330,7 +337,7 @@ const ButtonCard = {
     }
 
     const chartColors = computed(() => C.charteOf(store.draft).colors);
-    const colors = computed(() => [['auto', 'Automatique']].concat(Object.entries(chartColors.value).map(([id, c]) => [id, c.label])));
+    const colors = computed(() => [['auto', 'Automatique (charte Métropole)']].concat(C.BUTTON_COLORS.map(id => [id, C.COLORS[id].label])));
     const autoGradient = computed(() => {
       const ch = C.charteOf(store.draft);
       const cycle = ch.palettes[store.draft.look.palette].cycle.map(id => ch.colors[id].bg);
@@ -356,21 +363,15 @@ const TemplateGallery = {
   },
 };
 
-/** Grille de choix visuels : chaque option est une miniature du hub. */
-const ChoiceGrid = {
-  template: '#tpl-choices',
-  props: { label: String, value: String, options: Array, small: Boolean },
-  emits: ['change'],
-};
-
 /** Glisser-déposer (SortableJS) ; Vue reste maître du DOM : on annule le déplacement puis on change les données. */
 const vSortable = {
   mounted(el, { value }) {
     if (!value) { return; }
     el._sortable = Sortable.create(el, {
-      group: 'hub-buttons',
-      draggable: '.hub-btn',
-      filter: '.hub-adder',
+      group: value.group,
+      draggable: value.draggable,
+      handle: value.handle,
+      filter: value.filter,
       preventOnFilter: false,
       animation: 150,
       onMove: e => (e.related.classList.contains('hub-adder') ? -1 : true),
@@ -392,29 +393,6 @@ const SettingsPanel = {
   setup() {
     const d = computed(() => store.draft);
 
-    // Miniatures : le brouillon, réduit à quelques boutons.
-    function preview(patch) {
-      const buttons = C.allButtons(store.draft).slice(0, 3);
-      const sample = buttons.length ? buttons : C.SAMPLE_PAGES.slice(0, 3).map(p => C.newButton({ page: p.viewRef, label: p.name, icon: C.guessIcon(p.name) }));
-      const base = clone(store.draft);
-      return C.normalize({
-        ...base,
-        charte: patch.charte || base.charte,
-        header: { ...base.header, style: 'none', ...(patch.header || {}) },
-        background: { ...base.background, ...(patch.background || {}) },
-        look: { ...base.look, columns: 0, ...(patch.look || {}) },
-        sections: [{ id: 'apercu', title: '', buttons: patch.buttons ? sample.slice(0, patch.buttons) : sample }],
-        footer: '',
-      });
-    }
-
-    const choices = computed(() => ({
-      shape: [['tuile', 'Classique'], ['douce', 'Douce'], ['aplat', 'Aplat'], ['bloc', 'Bloc icône']]
-        .map(([value, label]) => ({ value, label, preview: preview({ look: { shape: value, align: 'left' }, background: { type: 'default' }, buttons: 2 }) })),
-      palette: Object.entries(C.charteOf(store.draft).palettes)
-        .map(([value, p]) => ({ value, label: p.label, hint: p.hint, swatches: p.cycle.map(id => C.charteOf(store.draft).colors[id].bg) })),
-    }));
-
     const hasImage = computed(() => store.draft.background.type === 'image');
     const setImage = on => { store.draft.background.type = on ? 'image' : 'default'; };
 
@@ -430,7 +408,7 @@ const SettingsPanel = {
     }
 
     return {
-      store, d, choices, hasImage, setImage, importImage,
+      store, d, hasImage, setImage, importImage,
       version: APP_VERSION,
     };
   },
@@ -484,13 +462,14 @@ async function loadContext() {
 /** Passe en édition. Une rubrique existe toujours ; si le hub est vide, la case d'ajout est déjà ouverte. */
 function startEditing(config = store.saved) {
   const draft = clone(config || C.defaultConfig());
-  if (!draft.sections.length) { draft.sections.push(C.newSection()); }
+  if (!draft.blocks.length) { draft.blocks = C.initialBlocks(); }
+  if (!C.sectionsOf(draft).length) { draft.blocks.push(C.newBlock('section')); }
   store.draft = draft;
   store.baseline = JSON.stringify(draft);
   store.editing = true;
   store.editId = null;
   store.panel = false;
-  store.ghost = isEmpty(draft) ? draft.sections[0].id : null;
+  store.ghost = isEmpty(draft) ? C.sectionsOf(draft)[0].id : null;
   loadContext();
 }
 
@@ -514,22 +493,20 @@ const App = {
 
     function chooseTemplate(id) {
       const base = store.editing ? store.draft : store.saved;
-      const cfg = C.fromTemplate(id, templatePages(), { ...C.normalize(base), sections: [] });
+      const cfg = C.fromTemplate(id, templatePages(), C.normalize(base));
       if (!store.editing) { startEditing(cfg); } else { store.draft = cfg; store.ghost = null; }
       store.gallery = false;
       notify(`Modèle « ${C.TEMPLATES.find(t => t.id === id).label} » appliqué : cliquez sur un bouton pour le modifier.`, 'success', 5000);
     }
 
     function startBlank() {
-      const blank = C.defaultConfig();
-      blank.sections.push(C.newSection());
-      startEditing(blank);
+      startEditing(C.defaultConfig());
       store.gallery = false;
     }
 
     async function finish() {
       const cfg = C.normalize(store.draft);
-      cfg.sections = cfg.sections.filter(s => s.buttons.length || s.title);
+      cfg.blocks = cfg.blocks.filter(b => (b.type === 'section' ? b.buttons.length : b.text.trim()));
       try {
         if (G.available) { await G.save(cfg); }
       } catch (e) {
@@ -613,7 +590,6 @@ createApp(App)
   .component('ghost-tile', GhostTile)
   .component('button-card', ButtonCard)
   .component('template-gallery', TemplateGallery)
-  .component('choice-grid', ChoiceGrid)
   .component('settings-panel', SettingsPanel)
   .directive('sortable', vSortable)
   .mount('#hub-root');
