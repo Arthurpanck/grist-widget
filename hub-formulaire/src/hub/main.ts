@@ -5,14 +5,13 @@
 import { FormLayoutNode } from "app/client/components/FormRenderer";
 import { Columns, Placeholder } from "app/client/components/Forms/Columns";
 import { Paragraph } from "app/client/components/Forms/Paragraph";
-import { attachCssRootVars, theme } from "app/client/ui2018/cssVars";
+import { attachCssRootVars } from "app/client/ui2018/cssVars";
 import { setupLocale } from "app/client/lib/localization";
 import * as gristCommands from "app/client/components/commands";
-import { primaryButton } from "app/client/ui2018/buttons";
 import { convertThemeKeysToCssVars } from "app/common/ThemePrefs";
 import { GristLight } from "app/common/themes/GristLight";
 import { getOrCreateStyleElement } from "app/client/lib/getOrCreateStyleElement";
-import { dom, Observable, styled } from "grainjs";
+import { dom, Observable } from "grainjs";
 import { v4 as uuidv4 } from "uuid";
 import { hubContext } from "./context";
 import { HubView } from "./HubView";
@@ -44,15 +43,6 @@ document.addEventListener("mousedown", (ev) => {
     [...appListeners].forEach(cb => cb());
   }
 }, true);
-
-const cssEmpty = styled("div", `
-  max-width: 420px;
-  margin: 15vh auto 0;
-  padding: 24px;
-  text-align: center;
-  color: ${theme.text};
-  & p { color: ${theme.lightText}; }
-`);
 
 const inGrist = typeof grist !== "undefined" && window.parent !== window;
 const readonly = new URLSearchParams(location.search).get("readonly") === "true";
@@ -99,15 +89,7 @@ const app = dom("div", { style: "height: 100%" },
       const view = HubView.create(null, layout.get()!, save, () => editing.set(false));
       return dom("div", { style: "height: 100%" }, dom.autoDispose(view), view.buildDom());
     }
-    if (!current || !current.children?.length) {
-      return cssEmpty(
-        dom("h2", "Hub vide"),
-        dom("p", readonly ? "Ce hub n'a pas encore été configuré." :
-          "Ouvrez la configuration du widget (menu ⋮ du widget) ou cliquez ci-dessous pour construire le hub."),
-        readonly ? null : primaryButton("Construire le hub", dom.on("click", edit), dom.cls("test-hub-start")),
-      );
-    }
-    return buildView(current);
+    return current ? buildView(current) : null;
   }),
 );
 gristCommands.init(); // comme app/client/ui/App.ts
@@ -141,6 +123,8 @@ if (inGrist) {
     if (editing.get()) { return; }
     const next = options?.[OPTION_KEY];
     layout.set(next && next.type === "Layout" ? next : null);
+    // Hub pas encore construit : on ouvre directement l'éditeur, avec la mise en page de départ.
+    if (!layout.get()) { edit(); }
   });
   loadContext().catch(err => console.warn("Pages et formulaires indisponibles (accès complet requis) :", err));
 } else {
@@ -148,4 +132,5 @@ if (inGrist) {
   hubContext.pages.set([{ id: 1, name: "Tableau de bord" }, { id: 2, name: "Projets" }, { id: 3, name: "Budget 2026" }]);
   hubContext.forms.set([{ id: 7, name: "Signaler un incident", page: "Signalements" }]);
   hubContext.docBase.set("https://docs.getgrist.com/doc/demo");
+  edit();
 }

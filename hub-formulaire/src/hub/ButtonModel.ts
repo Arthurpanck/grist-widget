@@ -9,7 +9,6 @@
  */
 import { FormLayoutNode } from "app/client/components/FormRenderer";
 import { buildEditor } from "app/client/components/Forms/Editor";
-import type { Destination } from "app/client/components/Forms/Menu";
 import { BoxModel } from "app/client/components/Forms/Model";
 import * as css from "app/client/components/Forms/styles";
 import { stopEvent } from "app/client/lib/domUtils";
@@ -55,15 +54,6 @@ export class ButtonModel extends BoxModel {
   /** Valeurs actuelles du bouton (observables du modèle de Grist). */
   public data(use: (obs: any) => any = (o: any) => o.get()): ButtonData {
     return Object.fromEntries(BUTTON_KEYS.map(k => [k, use(this.prop(k))])) as ButtonData;
-  }
-
-  /** Nouvelle destination, choisie dans le menu contextuel (« Changer la destination »). */
-  public setDestination(dest: Destination) {
-    this.prop("kind").set(dest.kind);
-    if (dest.kind === "page") { this.prop("page").set(dest.target); }
-    if (dest.kind === "form") { this.prop("form").set(dest.target); }
-    this.view.selectedBox.set(this);
-    this.save().catch(reportError);
   }
 
   public render(...args: IDomArgs<HTMLElement>): HTMLElement {

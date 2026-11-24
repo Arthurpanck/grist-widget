@@ -4,8 +4,8 @@
  * Adapté de grist-core app/client/components/Forms/Menu.ts (Apache-2.0) : même structure, mêmes
  * commandes et mêmes composants de menu. Le groupe « Nouvelle question », qui ajoute des colonnes à
  * une table, devient « Nouveau bouton » : des sous-menus listent les pages et les formulaires du
- * document, comme Grist liste les champs non affichés. Le menu contextuel d'un bouton permet aussi
- * d'en changer la destination.
+ * document, comme Grist liste les champs non affichés. Le menu contextuel garde Insérer et
+ * Supprimer, sans Copier, Couper, Coller.
  */
 import { allCommands } from "app/client/components/commands";
 import { FormLayoutNodeType } from "app/client/components/FormRenderer";
@@ -39,7 +39,6 @@ interface Props {
 
 /**
  * Choix d'une destination : sous-menus des pages et des formulaires du document, puis site web.
- * Sert au menu « + » (nouveau bouton) et au menu contextuel d'un bouton (changer la destination).
  */
 export function destinationItems(choose: (dest: Destination) => void) {
   const list = (kind: "page" | "form", icon: any, empty: string) => () => {
@@ -106,15 +105,6 @@ export function buildMenu(props: Props, ...args: IDomArgs<HTMLElement>): IDomArg
           menus.menuItemSubmenu(insertMenu(below), {}, "Insérer en dessous"),
           menus.menuDivider(),
         ],
-        box?.type === ("Button" as any) ? [
-          menus.menuItemSubmenu(() => destinationItems(dest => (box as any).setDestination(dest)), {},
-            "Changer la destination", testId("change-destination")),
-          menus.menuDivider(),
-        ] : null,
-        menus.menuItemCmd(allCommands.contextMenuCopy, "Copier"),
-        menus.menuItemCmd(allCommands.contextMenuCut, "Couper"),
-        menus.menuItemCmd(allCommands.contextMenuPaste, "Coller"),
-        menus.menuDivider(),
         menus.menuItemCmd(allCommands.deleteFields, "Supprimer"),
         (elem: HTMLElement) => void FocusLayer.create(ctl, { defaultFocusElem: elem, pauseMousetrap: true }),
         customItems?.length ? menus.menuDivider(dom.style("min-width", "200px")) : null,
