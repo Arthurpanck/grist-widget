@@ -3,7 +3,7 @@
  * Module pur (aucune dépendance, aucun accès au DOM) : testable isolément.
  */
 
-export const VERSION = 2;
+export const VERSION = 3;
 
 /* ------------------------------------------------------------------ */
 /* Couleurs de la charte Métropole de Lyon                             */
@@ -21,7 +21,19 @@ export const COLORS = {
   violet: { label: 'Violet', bg: '#7030A0', fg: '#FFFFFF' },
   rose: { label: 'Rouge rosé', bg: '#F49E9E', fg: '#1E2340' },
   gris: { label: 'Gris', bg: '#7F7F7F', fg: '#FFFFFF' },
+  // Palette par défaut de Metabase (couleurs « accent0 » à « accent7 »), proposée pour colorer un bouton.
+  'mb-bleu': { label: 'Bleu', bg: '#509EE3', fg: '#FFFFFF' },
+  'mb-vert': { label: 'Vert', bg: '#88BF4D', fg: '#1E2340' },
+  'mb-violet': { label: 'Violet', bg: '#A989C5', fg: '#1E2340' },
+  'mb-rouge': { label: 'Rouge', bg: '#EF8C8C', fg: '#1E2340' },
+  'mb-jaune': { label: 'Jaune', bg: '#F9D45C', fg: '#1E2340' },
+  'mb-orange': { label: 'Orange', bg: '#F2A86F', fg: '#1E2340' },
+  'mb-cyan': { label: 'Cyan', bg: '#98D9D9', fg: '#1E2340' },
+  'mb-indigo': { label: 'Indigo', bg: '#7172AD', fg: '#FFFFFF' },
 };
+
+/** Couleurs proposées dans la fiche d'un bouton (en plus de « Automatique »). */
+export const BUTTON_COLORS = ['mb-bleu', 'mb-vert', 'mb-violet', 'mb-rouge', 'mb-jaune', 'mb-orange', 'mb-cyan', 'mb-indigo'];
 
 /** Palettes : couleur des boutons laissés en « Automatique », selon leur rang. */
 export const PALETTES = {
@@ -224,20 +236,15 @@ export function uid(prefix = 'b') {
   return prefix + Math.random().toString(36).slice(2, 9);
 }
 
-/** Styles de tuiles proposés ; les anciennes formes « liste » et « pastille » deviennent des blocs icône. */
-export const SHAPES = ['tuile', 'douce', 'aplat', 'bloc'];
-const SHAPE_ALIASES = { liste: 'bloc', pastille: 'bloc', plein: 'aplat' };
 
 export function defaultConfig() {
   return {
     version: VERSION,
     charte: 'metropole',
-    header: { style: 'sobre', title: 'Portail du document', subtitle: '', logo: '', align: 'left' },
     background: { type: 'default', color: '#F4F4F6', image: '', veil: 0.4, tone: 'dark', fit: 'cover' },
-    look: { shape: 'tuile', palette: 'metropole', size: 'm', align: 'left', columns: 0 },
-    sections: [],
+    look: { shape: 'bloc', palette: 'metropole', size: 'm', align: 'left', columns: 0 },
+    blocks: [],
     footer: '',
-    numbering: true,
     docUrl: '',
     showEditButton: true,
   };
@@ -250,6 +257,23 @@ export function newButton(extra = {}) {
 export function newSection(extra = {}) {
   return { id: uid('s'), title: '', buttons: [], ...extra };
 }
+
+/**
+ * La page est une suite de blocs que l'on réordonne librement :
+ * titre, sous-titre, ou rubrique de boutons (« section »).
+ */
+export function newBlock(type, extra = {}) {
+  return type === 'section'
+    ? { id: uid('s'), type, buttons: [], ...extra }
+    : { id: uid(type === 'title' ? 't' : 'u'), type, text: '', ...extra };
+}
+
+/** Page neuve : un titre et une rubrique vide. */
+export function initialBlocks() {
+  return [newBlock('title'), newBlock('section')];
+}
+
+export const sectionsOf = config => config.blocks.filter(b => b.type === 'section');
 
 const pick = (v, allowed, fallback) => (allowed.includes(v) ? v : fallback);
 const str = v => (typeof v === 'string' ? v : '');
@@ -317,19 +341,12 @@ export function normalize(raw) {
   const d = defaultConfig();
   if (!raw || typeof raw !== 'object') { return d; }
   if (!raw.version || raw.version < 2 || (!raw.sections && Array.isArray(raw.buttons))) { raw = migrateV1(raw); }
-  const hd = raw.header || {}, bg = raw.background || {}, lk = raw.look || {};
+  const bg = raw.background || {}, lk = raw.look || {};
   const charte = pick(raw.charte, Object.keys(CHARTES), 'metropole');
   const ch = CHARTES[charte];
   return {
     version: VERSION,
     charte,
-    header: {
-      style: pick(hd.style, ['none', 'sobre', 'encadre', 'bandeau'], d.header.style),
-      title: str(hd.title),
-      subtitle: str(hd.subtitle),
-      logo: str(hd.logo),
-      align: pick(hd.align, ['left', 'center'], 'left'),
-    },
     background: {
       type: pick(bg.type, ['default', 'color', 'image'], 'default'),
       color: /^#[0-9a-f]{6}$/i.test(bg.color) ? bg.color : d.background.color,
@@ -339,26 +356,39 @@ export function normalize(raw) {
       fit: pick(bg.fit, ['cover', 'contain'], 'cover'),
     },
     look: {
-      shape: pick(SHAPE_ALIASES[lk.shape] || lk.shape, SHAPES, 'tuile'),
-      palette: paletteFor(charte, lk.palette),
+      shape: 'bloc',
+      palette: charte === 'metropole' ? 'metropole' : paletteFor(charte, lk.palette),
       size: pick(lk.size, ['s', 'm', 'l'], 'm'),
       align: pick(lk.align, ['left', 'center'], 'left'),
       columns: Math.round(num(lk.columns, 0, 6, 0)),
     },
-    sections: (Array.isArray(raw.sections) ? raw.sections : []).filter(s => s && typeof s === 'object').map(s => ({
-      id: str(s.id) || uid('s'),
-      title: str(s.title),
-      buttons: (Array.isArray(s.buttons) ? s.buttons : []).filter(b => b && typeof b === 'object').map(b => normalizeButton(b, ch.colors)),
-    })),
+    blocks: (Array.isArray(raw.blocks) ? raw.blocks : blocksFromV2(raw)).filter(b => b && typeof b === 'object').map(b => (
+      b.type === 'title' || b.type === 'subtitle'
+        ? { id: str(b.id) || uid('t'), type: b.type, text: str(b.text) }
+        : { id: str(b.id) || uid('s'), type: 'section',
+          buttons: (Array.isArray(b.buttons) ? b.buttons : []).filter(x => x && typeof x === 'object').map(x => normalizeButton(x, ch.colors)) })),
     footer: str(raw.footer),
-    numbering: raw.numbering !== false,
     docUrl: str(raw.docUrl),
     showEditButton: raw.showEditButton !== false,
   };
 }
 
+/** Configuration V2 (en-tête + rubriques titrées) → blocs : le titre de page devient un titre, le reste des sous-titres. */
+function blocksFromV2(raw) {
+  const hd = raw.header || {};
+  const blocks = [];
+  if (str(hd.title)) { blocks.push({ type: 'title', text: hd.title }); }
+  if (str(hd.subtitle)) { blocks.push({ type: 'subtitle', text: hd.subtitle }); }
+  for (const s of Array.isArray(raw.sections) ? raw.sections : []) {
+    if (!s || typeof s !== 'object') { continue; }
+    if (str(s.title)) { blocks.push({ type: 'subtitle', text: s.title }); }
+    blocks.push({ id: s.id, type: 'section', buttons: s.buttons });
+  }
+  return blocks;
+}
+
 export function allButtons(config) {
-  return config.sections.flatMap(s => s.buttons);
+  return sectionsOf(config).flatMap(s => s.buttons);
 }
 
 /* ------------------------------------------------------------------ */
@@ -481,14 +511,15 @@ export const TEMPLATES = [
 export function fromTemplate(id, pages, base = defaultConfig()) {
   const t = TEMPLATES.find(x => x.id === id);
   const partial = t ? t.build(pages) : {};
+  const { blocks, ...rest } = base;
   return normalize({
-    ...base,
+    ...rest,
     ...partial,
-    header: { ...defaultConfig().header, ...partial.header },
+    header: { title: '', subtitle: '', ...partial.header },
     background: { ...defaultConfig().background, ...partial.background },
     look: { ...defaultConfig().look, ...partial.look },
     sections: partial.sections || [],
-    version: VERSION,
+    version: 2,
   });
 }
 

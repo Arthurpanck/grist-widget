@@ -31,7 +31,7 @@
         <div v-if="store.editing" class="edit-bar" role="toolbar" aria-label="Édition du hub">
           <div class="edit-bar__info">
             <strong>Modification du hub</strong>
-            <span class="edit-bar__hint">Cliquez sur un bouton pour le modifier, glissez-le pour le déplacer.</span>
+            <span class="edit-bar__hint">Cliquez sur un bouton pour le modifier ; glissez boutons, titres et rubriques pour les déplacer.</span>
           </div>
           <div class="wa-cluster wa-gap-xs">
             <wa-button size="s" :appearance="store.panel ? 'filled' : 'outlined'" @click="store.panel = !store.panel">
@@ -81,59 +81,65 @@
     <!-- ============================================================ -->
     <template id="tpl-hub">
       <div class="hub" :style="rootStyle" :class="[
-          'hub--' + m.c.charte, 'hub--' + m.c.look.shape, 'hub--size-' + m.c.look.size, 'hub--align-' + m.c.look.align,
-          { 'hub--on-dark': m.onDark, 'hub--image': m.image, 'hub--columns': m.c.look.columns, 'hub--edit': mode === 'edit' }]">
-        <div v-if="m.hasHeader" class="hub__band" :class="'hub__band--' + m.headerStyle">
-          <header class="hub__head" :class="'hub__head--' + m.c.header.align">
-            <img v-if="m.c.header.logo" class="hub__logo" :src="m.c.header.logo" alt="">
-            <div v-if="mode === 'edit'" class="hub__head-edit">
-              <input class="hub__title hub__title-input" type="text" :value="m.c.header.title" placeholder="Titre de la page d'accueil"
-                aria-label="Titre de la page d'accueil" @input="setHeader('title', $event.target.value)">
-              <span class="hub__bar" aria-hidden="true"></span>
-              <input class="hub__subtitle hub__subtitle-input" type="text" :value="m.c.header.subtitle" placeholder="Sous-titre (facultatif)"
-                aria-label="Sous-titre" @input="setHeader('subtitle', $event.target.value)">
-            </div>
-            <div v-else class="wa-stack wa-gap-2xs">
-              <h1 v-if="m.c.header.title" class="hub__title">{{ m.c.header.title }}</h1>
-              <p v-if="m.c.header.subtitle" class="hub__subtitle">{{ m.c.header.subtitle }}</p>
-            </div>
-          </header>
-        </div>
-
+          'hub--' + m.c.charte, 'hub--bloc', 'hub--size-' + m.c.look.size, 'hub--align-' + m.c.look.align,
+          { 'hub--on-dark': m.onDark, 'hub--image': m.image, 'hub--columns': m.c.look.columns, 'hub--edit': editing }]">
         <main class="hub__body">
-          <section v-for="s in m.sections" :key="s.id" class="hub__section">
-            <div v-if="mode === 'edit'" class="hub__section-edit">
-              <input class="hub__section-input" type="text" :value="s.title" placeholder="Titre de rubrique (facultatif)"
-                aria-label="Titre de la rubrique" @input="setTitle(s.id, $event.target.value)">
-              <button v-if="m.sections.length > 1" type="button" class="hub__section-remove" title="Supprimer la rubrique"
-                aria-label="Supprimer la rubrique" @click="removeSection(s.id)"><wa-icon name="trash-2"></wa-icon></button>
+          <div class="hub__blocks" v-sortable="blockSort" data-key="blocks">
+            <div v-for="blk in m.blocks" :key="blk.id" class="hub-block" :class="'hub-block--' + blk.type">
+              <template v-if="editing">
+                <button type="button" class="hub-block__handle" title="Glisser pour déplacer" aria-label="Déplacer ce bloc">
+                  <wa-icon name="grip-vertical"></wa-icon></button>
+                <button type="button" class="hub-block__remove" :title="blk.type === 'section' ? 'Supprimer la rubrique' : 'Supprimer ce titre'"
+                  :aria-label="blk.type === 'section' ? 'Supprimer la rubrique' : 'Supprimer ce titre'" @click="removeBlock(blk.id)">
+                  <wa-icon name="trash-2"></wa-icon></button>
+              </template>
+
+              <template v-if="blk.type === 'title'">
+                <div v-if="editing" class="hub__title"><input class="hub__title-input" type="text" :data-block-input="blk.id"
+                  :value="blk.text" placeholder="Titre (ex. : Suivi des projets)" aria-label="Titre" @input="setText(blk.id, $event.target.value)"></div>
+                <h2 v-else class="hub__title">{{ blk.text }}</h2>
+              </template>
+
+              <template v-else-if="blk.type === 'subtitle'">
+                <div v-if="editing" class="hub__subtitle"><input class="hub__subtitle-input" type="text" :data-block-input="blk.id"
+                  :value="blk.text" placeholder="Sous-titre" aria-label="Sous-titre" @input="setText(blk.id, $event.target.value)"></div>
+                <h3 v-else class="hub__subtitle">{{ blk.text }}</h3>
+              </template>
+
+              <div v-else class="hub__grid" v-sortable="buttonSort" :data-key="blk.id">
+                <div v-for="item in blk.items" :key="item.b.id" class="hub-cell">
+                  <component :is="tagOf(item)" class="hub-btn"
+                    :id="editing ? 'hb-' + item.b.id : null"
+                    :class="{ 'hub-btn--problem': item.link.problem, 'hub-btn--no-icon': !item.b.icon, 'hub-btn--selected': editing && store.editId === item.b.id }"
+                    :style="{ '--c': item.color.bg, '--c-on': item.color.fg }"
+                    :href="mode === 'view' ? item.link.href : null" :target="mode === 'view' ? item.link.target : null"
+                    :rel="item.link.external ? 'noopener noreferrer' : null"
+                    :title="item.link.problem ? item.label + ' — ' + item.link.problem : (item.b.description || item.label)"
+                    :type="tagOf(item) === 'button' ? 'button' : null"
+                    :data-id="item.b.id" @click="click($event, item)">
+                    <span v-if="item.b.icon" class="hub-btn__icon">
+                      <wa-icon v-if="isIconName(item.b.icon)" :name="item.b.icon"></wa-icon>
+                      <template v-else>{{ item.b.icon }}</template>
+                    </span>
+                    <span class="hub-btn__text">
+                      <span class="hub-btn__label">{{ item.label }}</span>
+                      <span v-if="item.b.description" class="hub-btn__desc">{{ item.b.description }}</span>
+                    </span>
+                    <wa-icon class="hub-btn__go" :name="item.link.external ? 'external-link' : 'arrow-right'"></wa-icon>
+                  </component>
+                  <button v-if="editing" type="button" class="hub-cell__remove" :title="'Supprimer « ' + item.label + ' »'"
+                    :aria-label="'Supprimer le bouton ' + item.label" @click.stop="removeButton(item.b.id)"><wa-icon name="x"></wa-icon></button>
+                </div>
+                <ghost-tile v-if="editing" :section-id="blk.id"></ghost-tile>
+              </div>
             </div>
-            <h2 v-else-if="s.title" class="hub__section-title">{{ s.title }}</h2>
-            <div class="hub__grid" v-sortable="sortable" :data-key="s.id">
-              <component :is="tagOf(item)" v-for="item in s.items" :key="item.b.id" class="hub-btn"
-                :id="mode === 'edit' ? 'hb-' + item.b.id : null"
-                :class="{ 'hub-btn--problem': item.link.problem, 'hub-btn--no-icon': !item.b.icon, 'hub-btn--selected': mode === 'edit' && store.editId === item.b.id }"
-                :style="{ '--c': item.color.bg, '--c-on': item.color.fg }"
-                :href="mode === 'view' ? item.link.href : null" :target="mode === 'view' ? item.link.target : null"
-                :rel="item.link.external ? 'noopener noreferrer' : null"
-                :title="item.link.problem ? item.label + ' — ' + item.link.problem : (item.b.description || item.label)"
-                :type="tagOf(item) === 'button' ? 'button' : null"
-                :data-id="item.b.id" @click="click($event, item)">
-                <span v-if="item.b.icon" class="hub-btn__icon">
-                  <wa-icon v-if="isIconName(item.b.icon)" :name="item.b.icon"></wa-icon>
-                  <template v-else>{{ item.b.icon }}</template>
-                </span>
-                <span class="hub-btn__text">
-                  <span class="hub-btn__label">{{ item.label }}</span>
-                  <span v-if="item.b.description" class="hub-btn__desc">{{ item.b.description }}</span>
-                </span>
-                <wa-icon class="hub-btn__go" :name="item.link.external ? 'external-link' : 'arrow-right'"></wa-icon>
-              </component>
-              <ghost-tile v-if="mode === 'edit'" :section-id="s.id"></ghost-tile>
-            </div>
-          </section>
-          <div v-if="mode === 'edit'">
-            <button type="button" class="hub__add-section" @click="addSection"><wa-icon name="list-plus"></wa-icon>Ajouter une rubrique</button>
+          </div>
+
+          <div v-if="editing" class="hub__add" role="group" aria-label="Ajouter un bloc">
+            <span class="hub__add-label">Ajouter</span>
+            <button type="button" class="hub__add-btn" @click="addBlock('title')"><wa-icon name="heading-1"></wa-icon>Titre</button>
+            <button type="button" class="hub__add-btn" @click="addBlock('subtitle')"><wa-icon name="heading-2"></wa-icon>Sous-titre</button>
+            <button type="button" class="hub__add-btn" @click="addBlock('section')"><wa-icon name="layout-grid"></wa-icon>Rubrique de boutons</button>
           </div>
           <footer v-if="m.c.footer" class="hub__footer">{{ m.c.footer }}</footer>
         </main>
@@ -165,23 +171,6 @@
           <wa-button appearance="plain" @click="$emit('blank')">
             <wa-icon slot="start" name="file-plus"></wa-icon>Partir d'une page vierge
           </wa-button>
-        </div>
-      </div>
-    </template>
-
-    <!-- ============================================================ -->
-    <!-- Choix visuel (miniatures)                                    -->
-    <!-- ============================================================ -->
-    <template id="tpl-choices">
-      <div class="wa-stack wa-gap-xs">
-        <span class="field-label">{{ label }}</span>
-        <div class="choices" :class="{ 'choices--small': small }" role="radiogroup" :aria-label="label">
-          <button v-for="o in options" :key="o.value" type="button" class="choice" role="radio"
-            :aria-checked="String(o.value === value)" :title="o.hint || o.label" @click="$emit('change', o.value)">
-            <span v-if="o.swatches" class="choice__swatches"><span v-for="c in o.swatches" :style="{ background: c }"></span></span>
-            <span v-else class="choice__preview"><hub-view :config="o.preview" mode="static"></hub-view></span>
-            <span class="choice__label">{{ o.label }}</span>
-          </button>
         </div>
       </div>
     </template>
@@ -313,9 +302,6 @@
           <wa-button size="s" appearance="plain" @click="store.panel = false"><wa-icon name="x" label="Fermer le panneau"></wa-icon></wa-button>
         </div>
         <div class="panel__body wa-stack wa-gap-2xl">
-          <choice-grid label="Style des tuiles" :value="d.look.shape" :options="choices.shape" @change="v => d.look.shape = v"></choice-grid>
-          <choice-grid label="Couleurs" :value="d.look.palette" :options="choices.palette" small @change="v => d.look.palette = v"></choice-grid>
-
           <div class="wa-stack wa-gap-m">
             <span class="field-label">Image de fond</span>
             <wa-switch :checked.prop="hasImage" @change="setImage($event.target.checked)">Afficher une image en fond de page</wa-switch>

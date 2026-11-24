@@ -14,6 +14,24 @@ Après six pistes comparées (canevas « Hub — créer un bouton : 6 propositio
 | Déplacer | Glisser-déposer des boutons directement dans le hub, y compris entre rubriques. | Demande utilisateur |
 | Afficher | Panneau latéral « Affichage » (apparence, réglages), le hub restant visible à côté. | Pistes 2 et 3 |
 
+**Version 3.2 : la page est une suite de blocs.**
+- La page est une liste ordonnée de blocs : **Titre**, **Sous-titre** et **Rubrique de boutons**.
+  La barre « Ajouter : Titre · Sous-titre · Rubrique de boutons » est en bas du hub.
+- Tout se glisse-dépose :
+  - les blocs, par leur poignée ;
+  - les boutons, d'une rubrique à l'autre.
+- Une croix sur chaque bouton le supprime ; une corbeille supprime un bloc.
+- Un hub neuf commence par un titre vide et une rubrique vide, dont la case « Ajouter un bouton » est déjà ouverte.
+- Un seul style de tuile : « Bloc icône ».
+- Couleurs :
+  - par défaut, la charte Métropole ;
+  - dans la fiche, chaque bouton peut prendre une des 8 couleurs par défaut de Metabase, présentées en pastilles.
+- Le panneau Affichage ne garde que l'image de fond et la disposition.
+- Fond par défaut « Halo métropolitain » :
+  - trois halos très doux (bleu, rouge charte, marine) sur un blanc cassé ;
+  - une variante sombre suit le thème de Grist ;
+  - le contraste des titres reste au-dessus de 9:1.
+
 Les sections 3.1 et 3.2 ci-dessous décrivent la version 2 (galerie de modèles d'abord, panneau à onglets) ; la
 galerie reste disponible depuis l'état vide et les Réglages.
 
