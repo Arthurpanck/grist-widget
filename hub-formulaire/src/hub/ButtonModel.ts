@@ -9,7 +9,7 @@ import { BoxModel } from "app/client/components/Forms/Model";
 import { not } from "app/common/gutil";
 import { Computed, dom, IDomArgs } from "grainjs";
 import { v4 as uuidv4 } from "uuid";
-import { ButtonData, DEFAULT_ICON, hubContext } from "./context";
+import { ButtonData, hubContext } from "./context";
 import { buttonTile } from "./tile";
 
 export const BUTTON_KEYS = ["label", "description", "kind", "page", "form", "url", "icon", "color"] as const;
@@ -37,6 +37,6 @@ export class ButtonModel extends BoxModel {
 export function Button(kind: "page" | "form" | "url" = "page"): FormLayoutNode {
   return {
     id: uuidv4(), type: "Button" as any,
-    label: "", description: "", kind, page: null, form: null, url: "", icon: DEFAULT_ICON[kind], color: "rouge",
+    label: "", description: "", kind, page: null, form: null, url: "", icon: "", color: "rouge",
   } as any;
 }

@@ -1,36 +1,33 @@
 /**
- * Tuile d'un bouton : même rendu dans l'éditeur et en lecture. Icônes et variables de thème de Grist.
+ * Tuile d'un bouton, en « bloc icône » : bandeau coloré avec l'icône en haut, texte en dessous.
+ * Même rendu, et même taille, dans l'éditeur et en lecture. Variables de thème de Grist.
  */
-import { icon } from "app/client/ui2018/icons";
 import { theme } from "app/client/ui2018/cssVars";
 import { inlineStyle } from "app/common/gutil";
 import { dom, DomElementArg, styled } from "grainjs";
 import { ButtonData, colorOf, DEFAULT_ICON, labelOf } from "./context";
+import { hubIcon } from "./icons";
 
 export function buttonTile(b: ButtonData, tag: "a" | "div", ...args: DomElementArg[]) {
   const { bg, fg } = colorOf(b.color);
   const make = tag === "a" ? cssTileLink : cssTile;
-  // La tuile est un conteneur de requête (container-type) : étroite, elle passe en disposition
-  // verticale (voir public/hub.css), pour que le texte ne soit jamais coupé lettre par lettre.
   return make(
     dom.cls("hub-tile"),
     inlineStyle("--tile-bg", bg), inlineStyle("--tile-fg", fg),
-    dom("div.hub-tile__in",
-      cssTileIcon(dom.cls("hub-tile__icon"), icon((b.icon || DEFAULT_ICON[b.kind || "page"]) as any)),
-      cssTileText(
-        dom.cls("hub-tile__text"),
-        cssTileLabel(labelOf(b)),
-        b.description ? cssTileDesc(b.description) : null,
-      ),
-      cssTileGo(dom.cls("hub-tile__go"), icon("ArrowRight")),
+    cssTileIcon(hubIcon(b.icon, DEFAULT_ICON[b.kind || "page"])),
+    cssTileText(
+      cssTileLabel(labelOf(b)),
+      b.description ? cssTileDesc(b.description) : null,
     ),
     ...args,
   );
 }
 
 const tileCss = `
-  display: block;
-  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 124px;
   overflow: hidden;
   border: 1px solid ${theme.menuBorder};
   border-radius: 8px;
@@ -54,35 +51,29 @@ const cssTileIcon = styled("div", `
   flex: none;
   display: grid;
   place-items: center;
-  width: 64px;
+  height: 64px;
   background: var(--tile-bg);
-  --icon-color: var(--tile-fg);
-  & > .flexauto, & > div { width: 24px; height: 24px; }
+  color: var(--tile-fg);
+  & > svg { width: 30px; height: 30px; }
 `);
 const cssTileText = styled("div", `
   flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
-  padding: 10px 12px;
+  gap: 4px;
+  padding: 14px 16px;
 `);
 const cssTileLabel = styled("div", `
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.3;
   overflow-wrap: break-word;
   hyphens: auto;
 `);
 const cssTileDesc = styled("div", `
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.35;
   color: ${theme.lightText};
   overflow-wrap: break-word;
-`);
-const cssTileGo = styled("div", `
-  flex: none;
-  display: grid;
-  place-items: center;
-  padding-right: 12px;
-  --icon-color: ${theme.lightText};
 `);

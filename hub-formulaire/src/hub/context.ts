@@ -46,15 +46,8 @@ export function colorOf(color?: string) {
   return { bg, fg: dark ? "#FFFFFF" : "#1E2340" };
 }
 
-/** Icônes de Grist proposées pour les boutons. */
-export const ICONS = [
-  "Home", "Page", "TypeTable", "TypeCard", "TypeCardList", "ChartBar", "ChartPie", "ChartLine", "TypeCalendar",
-  "Database", "Folder", "Board", "Pivot", "Layers", "FormConfig", "Memo", "Pencil", "Mail", "Chat", "Notification",
-  "Public", "World", "FieldLink", "Bookmark", "Star", "Heart", "Flag", "Idea", "Info", "Help", "Search", "Settings",
-  "Lock", "Clock", "Desktop", "Mobile", "Video", "UseFinance", "UseHr", "UseSales", "UseScience", "UseEducate",
-] as const;
-
-export const DEFAULT_ICON: Record<string, string> = { page: "Page", form: "Pencil", url: "World" };
+/** Icône par défaut de chaque type de destination (voir icons.ts). */
+export const DEFAULT_ICON: Record<string, string> = { page: "file-text", form: "clipboard-list", url: "globe" };
 
 function hostOf(url?: string) {
   try { return new URL(safeUrl(url) || "").hostname.replace(/^www\./, ""); } catch (e) { return ""; }

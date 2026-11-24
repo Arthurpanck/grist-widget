@@ -15,12 +15,12 @@ import { buildMenu } from "app/client/components/Forms/Menu";
 import { textInput } from "app/client/ui/inputs";
 import { basicButton, primaryButton } from "app/client/ui2018/buttons";
 import { theme } from "app/client/ui2018/cssVars";
-import { icon } from "app/client/ui2018/icons";
 import * as menus from "app/client/ui2018/menus";
 import { Computed, Disposable, dom, Holder, MultiHolder, Observable, styled } from "grainjs";
 import { v4 as uuidv4 } from "uuid";
 import { Button, ButtonModel } from "./ButtonModel";
-import { COLORS, colorOf, hubContext, ICONS } from "./context";
+import { COLORS, colorOf, DEFAULT_ICON, hubContext } from "./context";
+import { HUB_ICONS, hubIcon } from "./icons";
 
 export class HubView extends Disposable {
   public selectedBox: Computed<BoxModel | null>;
@@ -212,9 +212,10 @@ export class HubView extends Disposable {
       cssLabel("Description"),
       textInput(p("description"), { placeholder: "Facultatif" }, dom.on("change", save)),
       cssLabel("Icône"),
-      cssIconGrid(ICONS.map(name => cssIconChoice(icon(name as any),
-        cssIconChoice.cls("-selected", use => use(p("icon")) === name),
-        dom.attr("title", name), dom.on("click", () => p("icon").set(name))))),
+      cssIconGrid(HUB_ICONS.map(ic => cssIconChoice(hubIcon(ic.id, ic.id),
+        cssIconChoice.cls("-selected", use => (use(p("icon")) || DEFAULT_ICON[use(kind)]) === ic.id),
+        dom.attr("title", ic.label), dom.attr("aria-label", ic.label),
+        dom.on("click", () => p("icon").set(ic.id))))),
       cssLabel("Couleur"),
       cssSwatches(
         COLORS.map(c => cssSwatch(dom.style("background", c.bg), dom.attr("title", c.label),
@@ -283,6 +284,8 @@ const cssPanel = styled("div", `
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Sans cela, quand le panneau déborde, ses listes et champs sont écrasés en hauteur. */
+  & > * { flex-shrink: 0; }
 `);
 const cssPanelTitle = styled("div", `
   font-size: 13px;
@@ -298,18 +301,20 @@ const cssLabel = styled("div", `
 `);
 const cssIconGrid = styled("div", `
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
 `);
 const cssIconChoice = styled("div", `
   display: grid;
   place-items: center;
-  height: 32px;
-  border-radius: 4px;
+  height: 40px;
+  border-radius: 6px;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px solid ${theme.menuBorder};
+  color: ${theme.text};
+  & > svg { width: 20px; height: 20px; }
   &:hover { background: ${theme.hover}; }
-  &-selected { border-color: ${theme.controlFg}; background: ${theme.hover}; }
+  &-selected { border: 2px solid ${theme.controlFg}; color: ${theme.controlFg}; background: ${theme.hover}; }
 `);
 const cssSwatches = styled("div", `
   display: flex;
