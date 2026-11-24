@@ -10,22 +10,27 @@ import { ButtonData, colorOf, DEFAULT_ICON, labelOf } from "./context";
 export function buttonTile(b: ButtonData, tag: "a" | "div", ...args: DomElementArg[]) {
   const { bg, fg } = colorOf(b.color);
   const make = tag === "a" ? cssTileLink : cssTile;
+  // La tuile est un conteneur de requête (container-type) : étroite, elle passe en disposition
+  // verticale (voir public/hub.css), pour que le texte ne soit jamais coupé lettre par lettre.
   return make(
+    dom.cls("hub-tile"),
     inlineStyle("--tile-bg", bg), inlineStyle("--tile-fg", fg),
-    cssTileIcon(icon((b.icon || DEFAULT_ICON[b.kind || "page"]) as any)),
-    cssTileText(
-      cssTileLabel(labelOf(b)),
-      b.description ? cssTileDesc(b.description) : null,
+    dom("div.hub-tile__in",
+      cssTileIcon(dom.cls("hub-tile__icon"), icon((b.icon || DEFAULT_ICON[b.kind || "page"]) as any)),
+      cssTileText(
+        dom.cls("hub-tile__text"),
+        cssTileLabel(labelOf(b)),
+        b.description ? cssTileDesc(b.description) : null,
+      ),
+      cssTileGo(dom.cls("hub-tile__go"), icon("ArrowRight")),
     ),
-    cssTileGo(icon("ArrowRight")),
     ...args,
   );
 }
 
 const tileCss = `
-  display: flex;
-  align-items: stretch;
-  min-height: 72px;
+  display: block;
+  container-type: inline-size;
   overflow: hidden;
   border: 1px solid ${theme.menuBorder};
   border-radius: 8px;
@@ -66,12 +71,13 @@ const cssTileText = styled("div", `
 const cssTileLabel = styled("div", `
   font-weight: 600;
   font-size: 14px;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  hyphens: auto;
 `);
 const cssTileDesc = styled("div", `
   font-size: 12px;
   color: ${theme.lightText};
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 `);
 const cssTileGo = styled("div", `
   flex: none;

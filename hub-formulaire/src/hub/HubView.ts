@@ -18,6 +18,7 @@ import { theme } from "app/client/ui2018/cssVars";
 import { icon } from "app/client/ui2018/icons";
 import * as menus from "app/client/ui2018/menus";
 import { Computed, Disposable, dom, Holder, MultiHolder, Observable, styled } from "grainjs";
+import { v4 as uuidv4 } from "uuid";
 import { Button, ButtonModel } from "./ButtonModel";
 import { COLORS, colorOf, hubContext, ICONS } from "./context";
 
@@ -28,6 +29,7 @@ export class HubView extends Disposable {
   public gristDoc = null;
 
   private _root: LayoutModel;
+  private _clipboard = "";
 
   constructor(layout: FormLayoutNode, private _onSave: (layout: FormLayoutNode) => void, private _onDone: () => void) {
     super();
@@ -50,21 +52,30 @@ export class HubView extends Disposable {
     }, this as any));
 
     const keyboardActions = {
-      copy: () => { this.selectedBox.get()?.copySelf().catch(reportError); },
-      cut: () => { this.selectedBox.get()?.cutSelf().catch(reportError); },
+      // Un widget Grist n'a pas accès au presse-papiers du système (permissions du cadre) : la copie
+      // est gardée dans le widget, et écrite dans le presse-papiers seulement s'il est autorisé.
+      copy: () => this._copy(false),
+      cut: () => this._copy(true),
       paste: () => {
         const doPaste = async () => {
-          const boxInClipboard = parseBox(await navigator.clipboard.readText());
+          const fromSystem = clipboardAllowed("clipboard-read") ? await navigator.clipboard.readText().catch(() => "") : "";
+          const boxInClipboard = parseBox(fromSystem) || parseBox(this._clipboard);
           if (!boxInClipboard) { return; }
+          // Bloc copié (et non coupé) : nouveaux identifiants, sinon deux blocs auraient le même.
+          const wasCut = Boolean(this._root.find(boxInClipboard.id)?.cut.get());
+          if (!wasCut) { renewIds(boxInClipboard); }
           if (!this.selectedBox.get()) {
             this.selectedBox.set(this._root.insert(boxInClipboard, 0));
           } else {
             this.selectedBox.set(this.selectedBox.get()!.insertBefore(boxInClipboard));
           }
-          const maybeCutBox = this._root.find(boxInClipboard.id);
-          if (maybeCutBox?.cut.get()) { maybeCutBox.removeSelf(); }
+          if (wasCut) {
+            const cutBox = [...this._root.traverse()].find(b => b.id === boxInClipboard.id && b.cut.get());
+            cutBox?.removeSelf();
+            this._clipboard = "";
+            if (clipboardAllowed("clipboard-write")) { await navigator.clipboard.writeText("").catch(() => {}); }
+          }
           await this._root.save();
-          await navigator.clipboard.writeText("");
         };
         doPaste().catch(reportError);
       },
@@ -146,6 +157,15 @@ export class HubView extends Disposable {
     );
   }
 
+  private _copy(cut: boolean) {
+    const selected = this.selectedBox.get();
+    if (!selected) { return; }
+    [...this._root.traverse()].forEach(box => box.cut.set(false));
+    this._clipboard = JSON.stringify(selected.toJSON());
+    if (clipboardAllowed("clipboard-write")) { navigator.clipboard.writeText(this._clipboard).catch(() => {}); }
+    if (cut) { selected.cut.set(true); }
+  }
+
   private _step(delta: number) {
     const all = [...this._root.traverse()];
     if (!all.length) { return; }
@@ -177,16 +197,16 @@ export class HubView extends Disposable {
       dom.on("click", ev => ev.stopPropagation()),
       cssPanelTitle("Bouton"),
       cssLabel("Destination"),
-      menus.select(kind, [
+      dom("div", dom.cls("test-hub-kind"), menus.select(kind, [
         { value: "page", label: "Une page du document", icon: "Page" },
         { value: "form", label: "Un formulaire", icon: "Pencil" },
         { value: "url", label: "Un site web", icon: "World" },
-      ]),
+      ])),
       dom.domComputed(kind, k => k === "url" ?
         textInput(p("url"), { placeholder: "www.exemple.fr" }, dom.on("change", save), dom.cls("test-hub-url")) :
         k === "form" ?
-          menus.select(p("form"), formOptions, { defaultLabel: "Choisir un formulaire" }) :
-          menus.select(p("page"), pageOptions, { defaultLabel: "Choisir une page" })),
+          dom("div", dom.cls("test-hub-target"), menus.select(p("form"), formOptions, { defaultLabel: "Choisir un formulaire" })) :
+          dom("div", dom.cls("test-hub-target"), menus.select(p("page"), pageOptions, { defaultLabel: "Choisir une page" }))),
       cssLabel("Texte du bouton"),
       textInput(p("label"), { placeholder: "Nom de la destination" }, dom.on("change", save), dom.cls("test-hub-label")),
       cssLabel("Description"),
@@ -209,6 +229,17 @@ export class HubView extends Disposable {
       cssPanelFoot(basicButton("Supprimer le bouton", dom.on("click", () => box.deleteSelf().catch(reportError)))),
     );
   }
+}
+
+/** Le cadre du widget autorise-t-il le presse-papiers ? (Grist ne l'accorde pas aux widgets.) */
+function clipboardAllowed(feature: string): boolean {
+  const policy = (document as any).permissionsPolicy || (document as any).featurePolicy;
+  return policy?.allowsFeature ? policy.allowsFeature(feature) : Boolean(navigator.clipboard);
+}
+
+function renewIds(node: FormLayoutNode) {
+  node.id = uuidv4();
+  node.children?.forEach(renewIds);
 }
 
 const cssHubEditor = styled("div", `

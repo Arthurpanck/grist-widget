@@ -77,7 +77,10 @@ function edit() {
 (window as any).__hub = { layout, editing, edit, hubContext };
 
 const app = dom("div", { style: "height: 100%" },
-  dom.domComputed(use => [use(editing), use(editing) ? null : use(layout)] as const, ([isEditing, current]) => {
+  // En lecture, le hub est redessiné quand Grist fournit les pages, les formulaires et l'adresse du
+  // document : ils arrivent après le premier affichage (sinon : « Page à choisir » et pas de lien).
+  dom.domComputed(use => [use(editing), use(editing) ? null : use(layout),
+    use(hubContext.pages), use(hubContext.forms), use(hubContext.docBase)] as const, ([isEditing, current]) => {
     if (isEditing) {
       const view = HubView.create(null, layout.get()!, save, () => editing.set(false));
       return dom("div", { style: "height: 100%" }, dom.autoDispose(view), view.buildDom());
@@ -105,7 +108,11 @@ async function loadContext() {
   const [pages, views, sections] = await Promise.all(
     ["_grist_Pages", "_grist_Views", "_grist_Views_section"].map(t => grist.docApi.fetchTable(t)));
   const names = new Map<number, string>(rows(views).map((v: any) => [v.id, v.name]));
+  // Les pages qui contiennent ce hub ne sont pas proposées comme destination.
+  const hubViews = new Set(rows(sections)
+    .filter((s: any) => s.parentKey === "custom" && /hub-formulaire/.test(s.options || "")).map((s: any) => s.parentId));
   hubContext.pages.set(rows(pages).sort((a: any, b: any) => a.pagePos - b.pagePos)
+    .filter((p: any) => !hubViews.has(p.viewRef))
     .map((p: any) => ({ id: p.viewRef, name: names.get(p.viewRef) || "" })).filter((p: any) => p.name));
   hubContext.forms.set(rows(sections).filter((s: any) => s.parentKey === "form" && names.has(s.parentId))
     .map((s: any) => ({ id: s.id, name: (s.title || "").trim() || names.get(s.parentId)!, page: names.get(s.parentId)! })));

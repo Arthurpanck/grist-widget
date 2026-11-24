@@ -1,0 +1,8 @@
+/* Tuiles des boutons : horizontales (icône à gauche), verticales quand la tuile est étroite. */
+.hub-tile__in { display: flex; align-items: stretch; min-height: 72px; height: 100%; }
+@container (max-width: 240px) {
+  .hub-tile__in { flex-direction: column; }
+  .hub-tile__icon { width: auto !important; height: 48px; }
+  .hub-tile__text { padding: 10px !important; }
+  .hub-tile__go { display: none !important; }
+}

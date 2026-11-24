@@ -67,6 +67,11 @@ npm run build     # produit dist/hub.js (esbuild, mêmes options TypeScript que 
 
 ## Limites du prototype
 
+- Grist ne donne pas à ses widgets l'accès au presse-papiers du système. Copier, couper et coller
+  fonctionnent donc à l'intérieur du hub (clic droit ou Ctrl+C, X, V), mais pas vers une autre
+  application.
+- Thème sombre de Grist : pas encore vérifié dans un vrai Grist.
+
 - Pas de thème Métropole : l'apparence est celle de Grist, en attendant le choix du design global.
 - Les icônes sont celles de Grist (environ 40 proposées), pas Lucide.
 - En lecture, la largeur est limitée à 960 px.
