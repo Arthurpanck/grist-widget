@@ -31,7 +31,11 @@ function visit(mod) {
   const src = readFileSync(file, "utf8").replace(/^import type[^;]*;/gm, "");
   for (const m of src.matchAll(IMPORT)) {
     const dep = m[1] || m[2] || m[3];
-    if (dep.startsWith("app/")) { visit(dep); } else if (dep.startsWith(".")) { visit(join(dirname(mod), dep)); }
+    if (dep.startsWith("app/")) {
+      visit(dep);
+    } else if (dep.startsWith(".")) {
+      visit(join(dirname(mod), dep));
+    }
   }
 }
 
