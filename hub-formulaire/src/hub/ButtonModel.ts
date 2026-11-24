@@ -15,11 +15,12 @@ import * as css from "app/client/components/Forms/styles";
 import { stopEvent } from "app/client/lib/domUtils";
 import { reportError } from "app/client/models/errors";
 import { autoGrow } from "app/client/ui/forms";
+import { showRenameDocModal } from "app/client/ui/RenameDocModal";
 import { theme } from "app/client/ui2018/cssVars";
 import { not } from "app/common/gutil";
 import { Computed, dom, IDomArgs, Observable, styled } from "grainjs";
 import { v4 as uuidv4 } from "uuid";
-import { ButtonData, hubContext, labelOf } from "./context";
+import { ButtonData, DEFAULT_EMOJI, defaultIcon, hubContext, iconOf, labelOf } from "./context";
 import { buttonTile, cssTileDesc, cssTileLabel } from "./tile";
 
 export const BUTTON_KEYS = ["label", "description", "kind", "page", "form", "url", "icon"] as const;
@@ -59,6 +60,11 @@ export class ButtonModel extends BoxModel {
 
   /** Nouvelle destination, choisie dans le menu contextuel (« Changer la destination »). */
   public setDestination(dest: Destination) {
+    // Emoji par défaut de l'ancien type : il suit le nouveau type.
+    const icon = iconOf(this.data());
+    if (icon.emoji === DEFAULT_EMOJI[this.prop("kind").get()]) {
+      this.prop("icon").set({ ...icon, emoji: DEFAULT_EMOJI[dest.kind] });
+    }
     this.prop("kind").set(dest.kind);
     if (dest.kind === "page") { this.prop("page").set(dest.target); }
     if (dest.kind === "form") { this.prop("form").set(dest.target); }
@@ -75,6 +81,7 @@ export class ButtonModel extends BoxModel {
         use(hubContext.pages); use(hubContext.forms);
         const data = this.data(use);
         return buttonTile(data, "div", {
+          icon: this._iconEditing(data),
           label: this._text("label", this.edit, labelOf(data), cssTileLabel, "Texte du bouton"),
           description: [
             this._text("description", this.editDescription, data.description || "", cssTileDesc,
@@ -125,6 +132,34 @@ export class ButtonModel extends BoxModel {
     });
   }
 
+  /**
+   * Un clic sur l'icône du bouton sélectionné ouvre la fenêtre de Grist « Renommer et définir
+   * l'icône » (RenameDocModal, celle des documents) : nom, couleurs et emoji. Elle enregistre par
+   * HomeModel.renameDoc ; on lui passe un équivalent qui enregistre dans le bouton.
+   */
+  private _iconEditing(data: ButtonData) {
+    const destinationName = labelOf({ ...data, label: "" });
+    const home = {
+      renameDoc: async (_id: string, name: string, appearance: { icon: ButtonData["icon"] }) => {
+        // Nom laissé à celui de la destination : le bouton continue de le suivre.
+        this.prop("label").set(name.trim() === destinationName ? "" : name.trim());
+        this.prop("icon").set(appearance.icon);
+        await this.save();
+      },
+    };
+    const doc = { id: this.id, name: labelOf(data), options: { appearance: { icon: iconOf(data) } } };
+    return [
+      dom.style("cursor", use => use(this.selected) ? "pointer" : ""),
+      dom.attr("title", use => use(this.selected) ? "Changer le nom et l'icône" : ""),
+      dom.cls("test-hub-icon"),
+      dom.on("click", (ev) => {
+        if (!this.selected.get()) { return; }
+        ev.stopPropagation();
+        showRenameDocModal({ home: home as any, doc: doc as any });
+      }),
+    ];
+  }
+
   private _startEdit(edit: Observable<boolean>) {
     return [
       dom.style("cursor", use => use(this.selected) ? "text" : ""),
@@ -143,7 +178,7 @@ export function Button(kind: "page" | "form" | "url" = "page", target: number | 
   return {
     id: uuidv4(), type: "Button" as any,
     label: "", description: "", kind,
-    page: kind === "page" ? target : null, form: kind === "form" ? target : null, url: "", icon: "",
+    page: kind === "page" ? target : null, form: kind === "form" ? target : null, url: "", icon: defaultIcon(kind),
   } as any;
 }
 

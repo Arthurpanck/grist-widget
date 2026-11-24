@@ -20,12 +20,26 @@ export interface ButtonData {
   page?: number | null;
   form?: number | null;
   url?: string;
-  icon?: string;
+  /** Icône, au format de l'icône d'un document Grist (RenameDocModal, DocIcon). */
+  icon?: IconSpec | string;
 }
 
 
-/** Icône par défaut de chaque type de destination (voir icons.ts). */
-export const DEFAULT_ICON: Record<string, string> = { page: "file-text", form: "clipboard-list", url: "globe" };
+export interface IconSpec { backgroundColor: string; color: string; emoji: string | null; }
+
+/** Emoji par défaut : page du document, formulaire, site web. */
+export const DEFAULT_EMOJI: Record<string, string> = { page: "📄", form: "📝", url: "🌐" };
+/** Couleurs par défaut : le vert du bouton « Envoyer » des formulaires de Grist, texte blanc. */
+export const DEFAULT_ICON_COLORS = { backgroundColor: "#16B378", color: "#FFFFFF" };
+
+export function defaultIcon(kind?: string): IconSpec {
+  return { ...DEFAULT_ICON_COLORS, emoji: DEFAULT_EMOJI[kind || "page"] };
+}
+
+/** Icône d'un bouton ; celles des versions précédentes (nom d'icône) prennent la valeur par défaut. */
+export function iconOf(b: ButtonData): IconSpec {
+  return b.icon && typeof b.icon === "object" ? { ...defaultIcon(b.kind), ...b.icon } : defaultIcon(b.kind);
+}
 
 function hostOf(url?: string) {
   try { return new URL(safeUrl(url) || "").hostname.replace(/^www\./, ""); } catch (e) { return ""; }

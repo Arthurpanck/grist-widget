@@ -1,21 +1,23 @@
 /**
- * Tuile d'un bouton, en « bloc icône » : bandeau vert de Grist (celui du bouton Envoyer des
- * formulaires) avec l'icône, texte en dessous. Même rendu, et même taille, dans l'éditeur et en
+ * Tuile d'un bouton, en « bloc icône » : bandeau avec l'icône (celle d'un document Grist : emoji ou
+ * initiales sur une couleur de fond, par défaut le vert du bouton Envoyer des formulaires), texte
+ * en dessous. Même rendu, et même taille, dans l'éditeur et en
  * lecture. Variables de thème de Grist.
  */
 import { theme, vars } from "app/client/ui2018/cssVars";
 import { dom, DomContents, DomElementArg, styled } from "grainjs";
-import { ButtonData, DEFAULT_ICON, labelOf } from "./context";
-import { hubIcon } from "./icons";
+import { buildDocIcon } from "app/client/ui/DocIcon";
+import { ButtonData, iconOf, labelOf } from "./context";
 
 /** Texte de la tuile : par défaut, le libellé et la description ; l'éditeur fournit les siens. */
-export interface TileText { label?: DomContents; description?: DomContents; }
+export interface TileText { label?: DomContents; description?: DomContents; icon?: DomElementArg; }
 
 export function buttonTile(b: ButtonData, tag: "a" | "div", text: TileText | null, ...args: DomElementArg[]) {
   const make = tag === "a" ? cssTileLink : cssTile;
   return make(
     dom.cls("hub-tile"),
-    cssTileIcon(hubIcon(b.icon, DEFAULT_ICON[b.kind || "page"])),
+    // Icône de document de Grist (emoji ou initiales, sur sa couleur de fond), en bandeau.
+    cssTileIcon(buildDocIcon({ docId: "", docName: labelOf(b), icon: iconOf(b) }), text?.icon),
     cssTileText(
       text?.label ?? cssTileLabel(labelOf(b)),
       text?.description ?? (b.description ? cssTileDesc(b.description) : null),
@@ -50,12 +52,9 @@ const cssTileLink = styled("a", tileCss);
 
 const cssTileIcon = styled("div", `
   flex: none;
-  display: grid;
-  place-items: center;
   height: 64px;
-  background: ${vars.primaryBg};
-  color: white;
-  & > svg { width: 30px; height: 30px; }
+  & > div { width: 100%; height: 100%; border-radius: 0; }
+  & > div > div { font-size: 30px; line-height: 1; }
 `);
 const cssTileText = styled("div", `
   flex: 1;

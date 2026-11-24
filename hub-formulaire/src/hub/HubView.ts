@@ -16,9 +16,7 @@ import { primaryButton } from "app/client/ui2018/buttons";
 import { theme } from "app/client/ui2018/cssVars";
 import { Computed, Disposable, dom, Holder, MultiHolder, Observable, styled } from "grainjs";
 import { v4 as uuidv4 } from "uuid";
-import { Button, ButtonModel } from "./ButtonModel";
-import { DEFAULT_ICON, hubContext } from "./context";
-import { HUB_ICONS, hubIcon } from "./icons";
+import { Button } from "./ButtonModel";
 
 export class HubView extends Disposable {
   public selectedBox: Computed<BoxModel | null>;
@@ -131,7 +129,7 @@ export class HubView extends Disposable {
     return cssHubEditor(
       cssToolbar(
         cssToolbarTitle("Modification du hub"),
-        cssToolbarHint("Cliquez sur un bloc pour le sélectionner, puis sur son texte pour le modifier. Glissez pour déplacer, clic droit pour plus d'actions."),
+        cssToolbarHint("Cliquez sur un bloc pour le sélectionner, puis sur son texte ou son icône pour les modifier. Glissez pour déplacer, clic droit pour plus d'actions."),
         primaryButton("Terminé", dom.on("click", () => this._onDone()), dom.cls("test-hub-done")),
       ),
       cssColumns(
@@ -151,7 +149,6 @@ export class HubView extends Disposable {
           ),
           dom.on("click", () => this.selectedBox.set(null)),
         ),
-        dom.domComputed(this.selectedBox, box => box instanceof ButtonModel ? this._buildButtonPanel(box) : null),
       ),
     );
   }
@@ -179,40 +176,6 @@ export class HubView extends Disposable {
     this.selectedBox.set(place(selected)(this.newElement(what)));
     this.save().catch(reportError);
   }
-
-  /**
-   * Panneau du bouton sélectionné : son icône. La destination se choisit dans les menus (« + », ou
-   * clic droit « Changer la destination ») ; le texte, la description et l'adresse d'un site web se
-   * modifient directement sur la tuile.
-   */
-  private _buildButtonPanel(box: ButtonModel) {
-    const p = (k: string) => box.prop(k);
-    const save = () => box.save().catch(reportError);
-    const kind = p("kind");
-    return cssPanel(
-      dom.autoDispose(p("icon").addListener(save)),
-      dom.on("click", ev => ev.stopPropagation()),
-      cssPanelTitle("Bouton"),
-      cssHint(dom.text(use => destinationText(use(kind), use(p("page")), use(p("form")), use)),
-        dom("br"), "Clic droit sur le bouton pour changer de destination.",
-        dom.maybe(use => use(kind) === "url", () => [dom("br"), "Cliquez sur l'adresse, sur la tuile, pour la modifier."])),
-      cssLabel("Icône"),
-      cssIconGrid(HUB_ICONS.map(ic => cssIconChoice(hubIcon(ic.id, ic.id),
-        cssIconChoice.cls("-selected", use => (use(p("icon")) || DEFAULT_ICON[use(kind)]) === ic.id),
-        dom.attr("title", ic.label), dom.attr("aria-label", ic.label),
-        dom.on("click", () => p("icon").set(ic.id))))),
-    );
-  }
-}
-
-function destinationText(kind: string, page: number | null, form: number | null, use: any) {
-  if (kind === "url") { return "Vers un site web."; }
-  if (kind === "form") {
-    const f = use(hubContext.forms).find((x: any) => x.id === form);
-    return f ? `Vers le formulaire « ${f.name} ».` : "Formulaire à choisir.";
-  }
-  const pg = use(hubContext.pages).find((x: any) => x.id === page);
-  return pg ? `Vers la page « ${pg.name} ».` : "Page à choisir.";
 }
 
 /** Le cadre du widget autorise-t-il le presse-papiers ? (Grist ne l'accorde pas aux widgets.) */
@@ -256,51 +219,4 @@ const cssAddBlock = styled("div", `
   position: relative;
   height: 48px;
   & > div { opacity: 1; }
-`);
-const cssPanel = styled("div", `
-  flex: none;
-  width: 300px;
-  overflow: auto;
-  padding: 16px;
-  border-left: 1px solid ${theme.menuBorder};
-  background: ${theme.mainPanelBg};
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  /* Sans cela, quand le panneau déborde, ses listes et champs sont écrasés en hauteur. */
-  & > * { flex-shrink: 0; }
-`);
-const cssPanelTitle = styled("div", `
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: ${theme.lightText};
-`);
-const cssLabel = styled("div", `
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 600;
-`);
-const cssIconGrid = styled("div", `
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 6px;
-`);
-const cssIconChoice = styled("div", `
-  display: grid;
-  place-items: center;
-  height: 40px;
-  border-radius: 6px;
-  cursor: pointer;
-  border: 1px solid ${theme.menuBorder};
-  color: ${theme.text};
-  & > svg { width: 20px; height: 20px; }
-  &:hover { background: ${theme.hover}; }
-  &-selected { border: 2px solid ${theme.controlFg}; color: ${theme.controlFg}; background: ${theme.hover}; }
-`);
-const cssHint = styled("div", `
-  font-size: 12px;
-  line-height: 1.5;
-  color: ${theme.lightText};
 `);
