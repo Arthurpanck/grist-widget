@@ -73,7 +73,7 @@
     <!-- ============================================================ -->
     <template id="tpl-hub">
       <div class="hub" :style="rootStyle" :class="[
-          'hub--' + m.c.look.shape, 'hub--size-' + m.c.look.size, 'hub--align-' + m.c.look.align,
+          'hub--' + m.c.charte, 'hub--' + m.c.look.shape, 'hub--size-' + m.c.look.size, 'hub--align-' + m.c.look.align,
           { 'hub--on-dark': m.onDark, 'hub--image': m.image, 'hub--columns': m.c.look.columns, 'hub--edit': mode === 'edit' }]">
         <div v-if="m.hasHeader" class="hub__band" :class="'hub__band--' + m.c.header.style">
           <header class="hub__head" :class="'hub__head--' + m.c.header.align">
@@ -213,7 +213,7 @@
                   <div v-for="(b, j) in s.buttons" :key="b.id" class="row" :data-id="b.id">
                     <wa-icon class="grip" name="grip-vertical" label="Glisser pour déplacer"></wa-icon>
                     <button type="button" class="row__main" @click="openButton(s.id, b.id)">
-                      <span class="row__dot" :style="{ background: colorOf(b, flatIndex(b.id), d.look.palette).bg, color: colorOf(b, flatIndex(b.id), d.look.palette).fg }">
+                      <span class="row__dot" :style="{ background: colorOf(b, flatIndex(b.id), d).bg, color: colorOf(b, flatIndex(b.id), d).fg }">
                         <wa-icon v-if="isIconName(b.icon)" :name="b.icon"></wa-icon>
                         <template v-else>{{ b.icon }}</template>
                       </span>
@@ -261,6 +261,7 @@
           <!-- Apparence ---------------------------------------------- -->
           <wa-tab-panel name="apparence">
             <div class="wa-stack wa-gap-2xl">
+              <choice-grid label="Charte graphique" :value="d.charte" :options="choices.charte" @change="setCharte"></choice-grid>
               <choice-grid label="Forme des boutons" :value="d.look.shape" :options="choices.shape" @change="v => d.look.shape = v"></choice-grid>
               <choice-grid label="Couleurs" :value="d.look.palette" :options="choices.palette" small @change="v => d.look.palette = v"></choice-grid>
 
@@ -446,7 +447,7 @@
               <span class="field-label">Couleur</span>
               <div class="wa-cluster wa-gap-xs" role="radiogroup" aria-label="Couleur">
                 <button v-for="[id, label] in colors" :key="id" type="button" class="swatch" role="radio" :title="label" :aria-label="label"
-                  :aria-checked="String(f.color === id)" :style="{ background: id === 'auto' ? autoGradient : COLORS[id].bg }" @click="f.color = id"></button>
+                  :aria-checked="String(f.color === id)" :style="{ background: id === 'auto' ? autoGradient : chartColors[id].bg }" @click="f.color = id"></button>
               </div>
             </div>
           </section>

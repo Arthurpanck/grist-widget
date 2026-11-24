@@ -50,6 +50,7 @@ Un aperçu en direct montre le bouton final. Cliquer sur un bouton de l'aperçu 
 
 | Réglage | Choix |
 |---|---|
+| Charte graphique | Métropole de Lyon, ou DSFR (Système de design de l'État : Bleu France, tuiles droites à liseré, police Marianne si elle est installée) |
 | Forme des boutons | tuiles, aplats, liste, pastilles |
 | Couleurs | Métropole (rouge alterné), institutionnel, rouge et bleu, multicolore |
 | En-tête | aucun, sobre, encadré, bandeau rouge ; titre, sous-titre et logo |
@@ -109,3 +110,5 @@ Les configurations créées avec la première version du hub sont reprises autom
 
 La configuration est enregistrée dans les options du widget, sous la clé `hub` : rien n'est écrit dans les tables.
 Ouvert hors de Grist, le widget affiche une démonstration avec des pages fictives.
+
+> **DSFR.** La charte DSFR reprend le style visuel du Système de design de l'État, sans son bloc-marque « République Française » : l'usage officiel du DSFR est réservé aux sites de l'État. La police Marianne n'est pas embarquée ; elle s'affiche si elle est installée sur le poste, sinon Arial est utilisée.
