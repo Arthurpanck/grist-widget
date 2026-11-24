@@ -48,7 +48,7 @@ cliquez ensuite sur **Enregistrer** dans le menu du widget.
 | **Icônes des boutons** : 24 icônes de [Lucide](https://lucide.dev) (licence ISC), dans `src/hub/icons.ts` | 1 | — |
 | **Remplacés**, car liés au document Grist ouvert : `Forms/FormView` (sert seulement de type) et `Forms/Field` (une question = une colonne de table) | 2 | 4 |
 | **Adapté de grist-core** : `Forms/Menu.ts` (« Nouveau bouton » et ses sous-menus au lieu de « Nouvelle question ») et `Forms/elements.ts` (liste des blocs) | 2 | ≈ 155 |
-| **Propre au hub** (`src/hub/`) : bloc Bouton, panneau de réglage, vue d'édition (reprend `FormView`), rendu des boutons en lecture, démarrage et liaison avec Grist | 6 | ≈ 680 |
+| **Propre au hub** (`src/hub/`) : bloc Bouton, panneau de réglage, vue d'édition (reprend `FormView`), rendu des boutons en lecture, démarrage et liaison avec Grist | 6 | ≈ 800 |
 
 Le démarrage (`src/hub/main.ts`) fait ce que fait l'application Grist (`app/client/ui/App.ts`) :
 - `window.gristConfig` ;
