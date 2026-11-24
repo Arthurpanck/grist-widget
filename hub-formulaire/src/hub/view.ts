@@ -13,8 +13,8 @@ class ButtonRenderer extends FormRenderer {
     const b = this.layoutNode as unknown as ButtonData;
     const link = linkOf(b);
     return link ?
-      buttonTile(b, "a", { href: link.href, target: link.target }, link.target === "_blank" ? { rel: "noopener" } : null) :
-      buttonTile(b, "div", dom.style("opacity", "0.55"), dom.attr("title", "Destination à choisir"));
+      buttonTile(b, "a", null, { href: link.href, target: link.target }, link.target === "_blank" ? { rel: "noopener" } : null) :
+      buttonTile(b, "div", null, dom.style("opacity", "0.55"), dom.attr("title", "Destination à choisir"));
   }
 }
 

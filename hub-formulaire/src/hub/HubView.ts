@@ -13,13 +13,12 @@ import * as style from "app/client/components/Forms/styles";
 import { reportError } from "app/client/models/errors";
 import { buildMenu } from "app/client/components/Forms/Menu";
 import { textInput } from "app/client/ui/inputs";
-import { basicButton, primaryButton } from "app/client/ui2018/buttons";
+import { primaryButton } from "app/client/ui2018/buttons";
 import { theme } from "app/client/ui2018/cssVars";
-import * as menus from "app/client/ui2018/menus";
 import { Computed, Disposable, dom, Holder, MultiHolder, Observable, styled } from "grainjs";
 import { v4 as uuidv4 } from "uuid";
 import { Button, ButtonModel } from "./ButtonModel";
-import { COLORS, colorOf, DEFAULT_ICON, hubContext } from "./context";
+import { DEFAULT_ICON, hubContext } from "./context";
 import { HUB_ICONS, hubIcon } from "./icons";
 
 export class HubView extends Disposable {
@@ -121,7 +120,8 @@ export class HubView extends Disposable {
 
   /** Nouveau bloc pour le menu « + » : bouton ou bloc de structure. */
   public newElement(what: NewBox): FormLayoutNode {
-    return "button" in what ? Button(what.button) : components.defaultElement(what.structure);
+    if ("structure" in what) { return components.defaultElement(what.structure); }
+    return Button(what.button.kind, "target" in what.button ? what.button.target : null);
   }
 
   public async save() {
@@ -132,7 +132,7 @@ export class HubView extends Disposable {
     return cssHubEditor(
       cssToolbar(
         cssToolbarTitle("Modification du hub"),
-        cssToolbarHint("Cliquez sur un bloc pour le sélectionner, glissez-le pour le déplacer, clic droit pour plus d'actions."),
+        cssToolbarHint("Cliquez sur un bloc pour le sélectionner, puis sur son texte pour le modifier. Glissez pour déplacer, clic droit pour plus d'actions."),
         primaryButton("Terminé", dom.on("click", () => this._onDone()), dom.cls("test-hub-done")),
       ),
       cssColumns(
@@ -181,55 +181,43 @@ export class HubView extends Disposable {
     this.save().catch(reportError);
   }
 
-  /** Panneau de réglage du bouton sélectionné (à la manière du panneau de droite de Grist). */
+  /**
+   * Panneau du bouton sélectionné : l'icône, et l'adresse pour un site web. La destination se
+   * choisit dans les menus (« + », ou clic droit « Changer la destination »), le texte et la
+   * description directement sur la tuile.
+   */
   private _buildButtonPanel(box: ButtonModel) {
     const p = (k: string) => box.prop(k);
     const save = () => box.save().catch(reportError);
-    const owner = MultiHolder.create(null);
     const kind = p("kind");
-    const pageOptions = Computed.create(owner, use => use(hubContext.pages).map(pg => ({ value: pg.id, label: pg.name })));
-    const formOptions = Computed.create(owner, use => use(hubContext.forms).map(f => ({ value: f.id, label: f.name })));
-    const persist = (obs: Observable<any>) => obs.addListener(save);
-    ["kind", "page", "form", "icon", "color"].forEach(k => owner.autoDispose(persist(p(k))));
-
     return cssPanel(
-      dom.autoDispose(owner),
+      dom.autoDispose(p("icon").addListener(save)),
       dom.on("click", ev => ev.stopPropagation()),
       cssPanelTitle("Bouton"),
-      cssLabel("Destination"),
-      dom("div", dom.cls("test-hub-kind"), menus.select(kind, [
-        { value: "page", label: "Une page du document", icon: "Page" },
-        { value: "form", label: "Un formulaire", icon: "Pencil" },
-        { value: "url", label: "Un site web", icon: "World" },
-      ])),
-      dom.domComputed(kind, k => k === "url" ?
-        textInput(p("url"), { placeholder: "www.exemple.fr" }, dom.on("change", save), dom.cls("test-hub-url")) :
-        k === "form" ?
-          dom("div", dom.cls("test-hub-target"), menus.select(p("form"), formOptions, { defaultLabel: "Choisir un formulaire" })) :
-          dom("div", dom.cls("test-hub-target"), menus.select(p("page"), pageOptions, { defaultLabel: "Choisir une page" }))),
-      cssLabel("Texte du bouton"),
-      textInput(p("label"), { placeholder: "Nom de la destination" }, dom.on("change", save), dom.cls("test-hub-label")),
-      cssLabel("Description"),
-      textInput(p("description"), { placeholder: "Facultatif" }, dom.on("change", save)),
+      cssHint(dom.text(use => destinationText(use(kind), use(p("page")), use(p("form")), use)),
+        dom("br"), "Clic droit sur le bouton pour changer de destination."),
+      dom.maybe(use => use(kind) === "url", () => [
+        cssLabel("Adresse du site"),
+        textInput(p("url"), { placeholder: "www.exemple.fr" }, dom.on("change", save), dom.cls("test-hub-url"),
+          (elem) => { if (!p("url").get()) { setTimeout(() => elem.focus(), 50); } }),
+      ]),
       cssLabel("Icône"),
       cssIconGrid(HUB_ICONS.map(ic => cssIconChoice(hubIcon(ic.id, ic.id),
         cssIconChoice.cls("-selected", use => (use(p("icon")) || DEFAULT_ICON[use(kind)]) === ic.id),
         dom.attr("title", ic.label), dom.attr("aria-label", ic.label),
         dom.on("click", () => p("icon").set(ic.id))))),
-      cssLabel("Couleur"),
-      cssSwatches(
-        COLORS.map(c => cssSwatch(dom.style("background", c.bg), dom.attr("title", c.label),
-          cssSwatch.cls("-selected", use => use(p("color")) === c.id), dom.on("click", () => p("color").set(c.id)))),
-        cssCustomSwatch(
-          dom.style("background", use => /^#/.test(use(p("color")) || "") ? use(p("color")) : ""),
-          dom("input", { type: "color", title: "Couleur personnalisée" },
-            dom.prop("value", use => colorOf(use(p("color"))).bg),
-            dom.on("input", (_e, el) => p("color").set((el as HTMLInputElement).value))),
-        ),
-      ),
-      cssPanelFoot(basicButton("Supprimer le bouton", dom.on("click", () => box.deleteSelf().catch(reportError)))),
     );
   }
+}
+
+function destinationText(kind: string, page: number | null, form: number | null, use: any) {
+  if (kind === "url") { return "Vers un site web."; }
+  if (kind === "form") {
+    const f = use(hubContext.forms).find((x: any) => x.id === form);
+    return f ? `Vers le formulaire « ${f.name} ».` : "Formulaire à choisir.";
+  }
+  const pg = use(hubContext.pages).find((x: any) => x.id === page);
+  return pg ? `Vers la page « ${pg.name} ».` : "Page à choisir.";
 }
 
 /** Le cadre du widget autorise-t-il le presse-papiers ? (Grist ne l'accorde pas aux widgets.) */
@@ -316,27 +304,8 @@ const cssIconChoice = styled("div", `
   &:hover { background: ${theme.hover}; }
   &-selected { border: 2px solid ${theme.controlFg}; color: ${theme.controlFg}; background: ${theme.hover}; }
 `);
-const cssSwatches = styled("div", `
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+const cssHint = styled("div", `
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${theme.lightText};
 `);
-const cssSwatch = styled("div", `
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  cursor: pointer;
-  box-shadow: 0 0 0 1px ${theme.menuBorder};
-  &-selected { box-shadow: 0 0 0 2px ${theme.mainPanelBg}, 0 0 0 4px ${theme.controlFg}; }
-`);
-const cssCustomSwatch = styled("label", `
-  position: relative;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  cursor: pointer;
-  background: conic-gradient(#EF8C8C, #F9D45C, #88BF4D, #98D9D9, #509EE3, #A989C5, #EF8C8C);
-  box-shadow: 0 0 0 1px ${theme.menuBorder};
-  & input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-`);
-const cssPanelFoot = styled("div", `margin-top: 16px;`);

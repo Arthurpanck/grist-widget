@@ -14,7 +14,6 @@ import { GristLight } from "app/common/themes/GristLight";
 import { getOrCreateStyleElement } from "app/client/lib/getOrCreateStyleElement";
 import { dom, Observable, styled } from "grainjs";
 import { v4 as uuidv4 } from "uuid";
-import { Button } from "./ButtonModel";
 import { hubContext } from "./context";
 import { HubView } from "./HubView";
 import { buildView } from "./view";
@@ -30,6 +29,21 @@ attachCssRootVars("grist");
 const defaults = convertThemeKeysToCssVars({ appearance: "light", colors: GristLight } as any);
 getOrCreateStyleElement("hub-default-theme", { element: document.getElementById("grist-root-css"), position: "afterend" })
   .textContent = `@layer grist-base { :root { ${Object.entries(defaults.colors).map(([k, v]) => `--grist-theme-${k}: ${v};`).join(" ")} } }`;
+
+// Les éditeurs de texte de Grist (Forms/styles.ts, saveControls) enregistrent quand l'application
+// signale « clipboard_focus », c'est-à-dire quand l'utilisateur clique ailleurs que dans un champ
+// (dans Grist, le focus revient alors à son presse-papiers). Le widget n'a pas l'application
+// Grist : il émet le même signal au clic hors d'un champ.
+const appListeners = new Set<() => void>();
+(window as any).gristApp = {
+  on(name: string, cb: () => void) { if (name === "clipboard_focus") { appListeners.add(cb); } },
+  off(name: string, cb: () => void) { appListeners.delete(cb); },
+};
+document.addEventListener("mousedown", (ev) => {
+  if (!(ev.target as Element).closest?.("textarea, input, select, [contenteditable]")) {
+    [...appListeners].forEach(cb => cb());
+  }
+}, true);
 
 const cssEmpty = styled("div", `
   max-width: 420px;
@@ -51,7 +65,7 @@ function starterLayout(): FormLayoutNode {
       {
         id: uuidv4(), type: "Section", children: [
           Paragraph("## **Rubrique**"),
-          { ...Columns(), children: [Button("page"), Placeholder(), Placeholder()] },
+          { ...Columns(), children: [Placeholder(), Placeholder(), Placeholder()] },
         ],
       },
     ],

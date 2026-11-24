@@ -21,30 +21,8 @@ export interface ButtonData {
   form?: number | null;
   url?: string;
   icon?: string;
-  color?: string;
 }
 
-/** Couleurs proposées : charte Métropole de Lyon, puis palette par défaut de Metabase. */
-export const COLORS: { id: string, label: string, bg: string }[] = [
-  { id: "rouge", label: "Rouge Métropole", bg: "#FF0000" },
-  { id: "rouge-fonce", label: "Rouge foncé", bg: "#C00000" },
-  { id: "marine", label: "Bleu marine", bg: "#2A3158" },
-  { id: "bleu", label: "Bleu", bg: "#509EE3" },
-  { id: "vert", label: "Vert", bg: "#88BF4D" },
-  { id: "violet", label: "Violet", bg: "#A989C5" },
-  { id: "corail", label: "Corail", bg: "#EF8C8C" },
-  { id: "jaune", label: "Jaune", bg: "#F9D45C" },
-  { id: "orange", label: "Orange", bg: "#F2A86F" },
-  { id: "cyan", label: "Cyan", bg: "#98D9D9" },
-  { id: "indigo", label: "Indigo", bg: "#7172AD" },
-];
-
-export function colorOf(color?: string) {
-  const bg = /^#[0-9a-f]{6}$/i.test(color || "") ? color! : (COLORS.find(c => c.id === color) ?? COLORS[0]).bg;
-  const n = parseInt(bg.slice(1), 16);
-  const dark = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) < 150;
-  return { bg, fg: dark ? "#FFFFFF" : "#1E2340" };
-}
 
 /** Icône par défaut de chaque type de destination (voir icons.ts). */
 export const DEFAULT_ICON: Record<string, string> = { page: "file-text", form: "clipboard-list", url: "globe" };

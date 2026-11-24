@@ -2,8 +2,10 @@
  * Menu « + » et menu contextuel des blocs.
  *
  * Adapté de grist-core app/client/components/Forms/Menu.ts (Apache-2.0) : même structure, mêmes
- * commandes et mêmes composants de menu. La seule différence : le groupe « Nouvelle question »,
- * qui ajoute des colonnes à une table, devient « Nouveau bouton » (page, formulaire, site web).
+ * commandes et mêmes composants de menu. Le groupe « Nouvelle question », qui ajoute des colonnes à
+ * une table, devient « Nouveau bouton » : des sous-menus listent les pages et les formulaires du
+ * document, comme Grist liste les champs non affichés. Le menu contextuel d'un bouton permet aussi
+ * d'en changer la destination.
  */
 import { allCommands } from "app/client/components/commands";
 import { FormLayoutNodeType } from "app/client/components/FormRenderer";
@@ -13,6 +15,7 @@ import { BoxModel, Place } from "app/client/components/Forms/Model";
 import { makeTestId, stopEvent } from "app/client/lib/domUtils";
 import { FocusLayer } from "app/client/lib/FocusLayer";
 import * as menus from "app/client/ui2018/menus";
+import { hubContext } from "../../../../../hub/context";
 
 import { dom, IDomArgs } from "grainjs";
 
@@ -20,8 +23,11 @@ const testId = makeTestId("test-forms-menu-");
 
 export type ButtonKind = "page" | "form" | "url";
 
-// Nouveau bloc : un bouton (vers une page, un formulaire ou un site web) ou un bloc de structure.
-export type NewBox = { button: ButtonKind } | { structure: FormLayoutNodeType };
+/** Destination d'un bouton : une page ou un formulaire du document, ou un site web. */
+export type Destination = { kind: "page" | "form", target: number } | { kind: "url" };
+
+// Nouveau bloc : un bouton (vers une destination) ou un bloc de structure.
+export type NewBox = { button: Destination } | { structure: FormLayoutNodeType };
 
 interface Props {
   box?: BoxModel;
@@ -31,11 +37,26 @@ interface Props {
   insertBox?: Place,
 }
 
-export const BUTTON_KINDS: { kind: ButtonKind, label: string, icon: any }[] = [
-  { kind: "page", label: "Vers une page", icon: "Page" },
-  { kind: "form", label: "Vers un formulaire", icon: "Pencil" },
-  { kind: "url", label: "Vers un site web", icon: "World" },
-];
+/**
+ * Choix d'une destination : sous-menus des pages et des formulaires du document, puis site web.
+ * Sert au menu « + » (nouveau bouton) et au menu contextuel d'un bouton (changer la destination).
+ */
+export function destinationItems(choose: (dest: Destination) => void) {
+  const list = (kind: "page" | "form", icon: any, empty: string) => () => {
+    const items = kind === "page" ? hubContext.pages.get() : hubContext.forms.get();
+    return items.length ?
+      items.map(it => menus.menuItem(() => choose({ kind, target: it.id }), menus.menuIcon(icon), it.name,
+        testId(`${kind}-item`))) :
+      [menus.menuText(empty)];
+  };
+  return [
+    menus.menuItemSubmenu(list("page", "Page", "Aucune page dans ce document"), {},
+      menus.menuIcon("Page"), "Vers une page", testId("button-page")),
+    menus.menuItemSubmenu(list("form", "Pencil", "Aucun formulaire dans ce document"), {},
+      menus.menuIcon("Pencil"), "Vers un formulaire", testId("button-form")),
+    menus.menuItem(() => choose({ kind: "url" }), menus.menuIcon("World"), "Vers un site web", testId("button-url")),
+  ];
+}
 
 export function buildMenu(props: Props, ...args: IDomArgs<HTMLElement>): IDomArgs<HTMLElement> {
   const { box, context, customItems } = props;
@@ -62,11 +83,7 @@ export function buildMenu(props: Props, ...args: IDomArgs<HTMLElement>): IDomArg
       } : null;
 
       const insertMenu = (where: typeof above) => () => [
-        menus.menuGroup(
-          "Nouveau bouton",
-          ...BUTTON_KINDS.map(k => menus.menuItem(where({ button: k.kind }), menus.menuIcon(k.icon), k.label,
-            testId("button-" + k.kind))),
-        ),
+        menus.menuGroup("Nouveau bouton", ...destinationItems(dest => where({ button: dest })())),
         menus.menuDivider(),
         menus.menuGroup(
           "Blocs",
@@ -89,6 +106,11 @@ export function buildMenu(props: Props, ...args: IDomArgs<HTMLElement>): IDomArg
           menus.menuItemSubmenu(insertMenu(below), {}, "Insérer en dessous"),
           menus.menuDivider(),
         ],
+        box?.type === ("Button" as any) ? [
+          menus.menuItemSubmenu(() => destinationItems(dest => (box as any).setDestination(dest)), {},
+            "Changer la destination", testId("change-destination")),
+          menus.menuDivider(),
+        ] : null,
         menus.menuItemCmd(allCommands.contextMenuCopy, "Copier"),
         menus.menuItemCmd(allCommands.contextMenuCut, "Couper"),
         menus.menuItemCmd(allCommands.contextMenuPaste, "Coller"),

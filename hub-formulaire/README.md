@@ -10,22 +10,26 @@ ceux du widget Formulaire :
 - paragraphes Markdown modifiés sur place ;
 - rubriques et colonnes, avec leurs cases « Colonne 2 » à remplir.
 
-Seule différence : le menu « + » propose **Nouveau bouton** (vers une page, un formulaire ou un site
-web) à la place de « Nouvelle question ».
+Seule différence : le menu « + » propose **Nouveau bouton** à la place de « Nouvelle question ». Ses
+sous-menus listent les pages et les formulaires du document, comme Grist liste les champs non
+affichés ; « Vers un site web » ajoute un lien externe.
 
 ## Utilisation
 
 1. Ajoutez un widget personnalisé, avec l'URL de `index.html` de ce dossier et l'**accès complet**.
 2. Cliquez sur **Construire le hub**, ou ouvrez **Ouvrir la configuration** dans le menu ⋮ du widget.
 3. Pour composer la page :
-   - le **+** vert ajoute un bouton ou un bloc ;
-   - un clic sélectionne un bloc ;
-   - le clic droit ouvre le menu (copier, couper, coller, supprimer) ;
+   - le **+** vert, ou une case « Colonne » vide, ajoute un bouton (choisissez la page ou le
+     formulaire dans le sous-menu) ou un bloc ;
+   - un clic sélectionne un bloc ; sur un bloc sélectionné, un clic sur un texte le modifie, comme
+     le libellé d'une question (Entrée enregistre, Échap annule) ;
+   - le clic droit ouvre le menu : changer la destination d'un bouton, copier, couper, coller,
+     supprimer ;
    - glissez les blocs pour les déplacer.
-4. Un bouton sélectionné ouvre son panneau à droite : destination, texte, description, icône (24 icônes
-   Lucide choisies pour un hub : accueil, page, tableau, statistiques, agenda, équipe, formulaire,
-   courriel, téléphone, lieu, site web, aide…) et couleur (charte Métropole, palette Metabase ou
-   couleur personnalisée).
+4. Un bouton sélectionné ouvre un panneau à droite : son icône (24 icônes Lucide choisies pour un
+   hub : accueil, page, tableau, statistiques, agenda, équipe, formulaire, courriel, téléphone, lieu,
+   site web, aide…) et, pour un site web, son adresse. Tous les boutons ont le vert du bouton
+   « Envoyer » des formulaires de Grist.
 5. **Terminé** affiche le hub tel que le voient les lecteurs. Les paragraphes, rubriques et colonnes
    passent par le rendu des formulaires publiés de Grist (`FormRenderer`).
 
@@ -41,13 +45,15 @@ cliquez ensuite sur **Enregistrer** dans le menu du widget.
 | **Traductions et icônes de Grist** (`locales/`, `public/grist-icons.css`) | 3 | — |
 | **Icônes des boutons** : 24 icônes de [Lucide](https://lucide.dev) (licence ISC), dans `src/hub/icons.ts` | 1 | — |
 | **Remplacés**, car liés au document Grist ouvert : `Forms/FormView` (sert seulement de type) et `Forms/Field` (une question = une colonne de table) | 2 | 4 |
-| **Adapté de grist-core** : `Forms/Menu.ts` (« Nouveau bouton » au lieu de « Nouvelle question ») et `Forms/elements.ts` (liste des blocs) | 2 | ≈ 135 |
-| **Propre au hub** (`src/hub/`) : bloc Bouton, panneau de réglage, vue d'édition (reprend `FormView`), rendu des boutons en lecture, démarrage et liaison avec Grist | 6 | ≈ 720 |
+| **Adapté de grist-core** : `Forms/Menu.ts` (« Nouveau bouton » et ses sous-menus au lieu de « Nouvelle question ») et `Forms/elements.ts` (liste des blocs) | 2 | ≈ 155 |
+| **Propre au hub** (`src/hub/`) : bloc Bouton, panneau de réglage, vue d'édition (reprend `FormView`), rendu des boutons en lecture, démarrage et liaison avec Grist | 6 | ≈ 680 |
 
 Le démarrage (`src/hub/main.ts`) fait ce que fait l'application Grist (`app/client/ui/App.ts`) :
 - `window.gristConfig` ;
 - `commands.init()` ;
-- `setupLocale()`, qui charge les traductions officielles de Grist depuis `locales/`.
+- `setupLocale()`, qui charge les traductions officielles de Grist depuis `locales/` ;
+- `window.gristApp`, réduit au signal « clipboard_focus » qu'attendent les éditeurs de texte des
+  formulaires pour enregistrer quand on clique ailleurs.
 
 Le code de Grist charge certaines parties à la demande, par des imports dynamiques regroupés dans
 `app/client/lib/imports.js` : document complet, pages d'administration, éditeur de code,
@@ -75,7 +81,7 @@ npm run build     # produit dist/hub.js (esbuild, mêmes options TypeScript que 
   application.
 - Thème sombre de Grist : pas encore vérifié dans un vrai Grist.
 
-- Pas de thème Métropole : l'apparence est celle de Grist, en attendant le choix du design global.
+- Pas de thème Métropole : l'apparence est celle de Grist.
 - En lecture, la largeur est limitée à 960 px.
 - Hors de Grist, le widget affiche une démonstration avec des pages fictives.
 
