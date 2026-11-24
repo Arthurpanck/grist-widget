@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "files": [],
+  "include": ["src/hub/**/*.ts", "src/shims/**/*.ts", "src/types/**/*.ts", "test/**/*.ts"]
+}

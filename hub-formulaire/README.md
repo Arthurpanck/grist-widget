@@ -32,6 +32,9 @@ affichés ; « Vers un site web » ajoute un lien externe.
    le vert du bouton « Envoyer » des formulaires.
 6. **Terminé** affiche le hub tel que le voient les lecteurs. Les paragraphes, rubriques et colonnes
    passent par le rendu des formulaires publiés de Grist (`FormRenderer`).
+7. Si la page ou le formulaire d'un bouton est supprimé du document, le bouton reste, grisé et sans
+   lien, avec « Page à choisir » ou « Formulaire à choisir » s'il n'a pas de texte. C'est le principe
+   du Formulaire, qui retire les questions dont la colonne a été supprimée (`cleanFormLayoutSpec`).
 
 La mise en page est enregistrée dans les options du widget (clé `layout`), au même format JSON que la
 mise en page d'un formulaire, avec un type de bloc en plus : `Button`. Comme pour tout widget,
@@ -69,22 +72,32 @@ erreur au lieu de produire un hub cassé. Il aligne enfin les versions des dépe
 Le code du hub s'écrit comme celui des formulaires de Grist : imports `app/client/hub/…` (résolus vers
 `src/hub/` par `tools/build.mjs` et `tsconfig.json`), blocs construits sur `BoxModel` et
 `buildEditor`, pages et formulaires transmis par la vue (`HubView.hub`) et par le contexte du rendu
-(`FormRendererContext.hub`). `npm run check` vérifie les types de tout le code, avec les options de
-TypeScript de Grist. Pour reprendre une version plus récente de Grist, changez `GRIST_CORE_COMMIT`
+(`FormRendererContext.hub`). Comme pour le code de Grist :
+- `npm run check` vérifie les types, avec les options de TypeScript de Grist ;
+- `npm run lint` applique ses règles de style (sa configuration ESLint, copiée dans `src/grist/`),
+  sans aucun avertissement toléré ;
+- `npm test` lance les tests (`test/hub.test.js`), écrits sur le modèle de ceux du Formulaire
+  (`test/nbrowser/FormView1.ts` dans grist-core) : 16 scénarios qui ouvrent le widget dans Chromium,
+  dans une page qui imite Grist avec un document fictif, et l'utilisent comme un utilisateur
+  (édition, lecture, destinations supprimées, lecteur, accès limité, cadre étroit). Playwright doit
+  disposer de Chromium (`npx playwright install chromium`).
+
+Pour reprendre une version plus récente de Grist, changez `GRIST_CORE_COMMIT`
 dans `tools/sync-grist.sh`, puis lancez :
 
 ```bash
 npm run sync      # copie le code de grist-core et aligne les dépendances
 npm install
 npm run check     # vérifie les types (tsc, options de Grist)
+npm run lint      # vérifie le style (ESLint, règles de Grist)
 npm run build     # produit dist/hub.js (esbuild)
+npm test          # lance les tests
 ```
 
 `dist/hub.js` (≈ 650 Ko) est versionné pour que la page puisse être servie telle quelle.
 
 ## Limites du prototype
 
-- Thème sombre de Grist : pas encore vérifié dans un vrai Grist.
 - Pas de thème Métropole : l'apparence est celle de Grist.
 - En lecture, la largeur est limitée à 960 px.
 - Hors de Grist, le widget affiche une démonstration avec des pages fictives.

@@ -50,7 +50,8 @@ if [ -z "$SRC" ]; then
   trap 'rm -rf "$(dirname "$SRC")"' EXIT
   git clone --quiet --filter=blob:none --no-checkout https://github.com/gristlabs/grist-core.git "$SRC"
   git -C "$SRC" sparse-checkout set --no-cone app/client app/common app/plugin \
-    static/icons/icons.css assets/locales/fr.client.json assets/locales/en.client.json LICENSE.txt package.json
+    static/icons/icons.css assets/locales/fr.client.json assets/locales/en.client.json LICENSE.txt package.json \
+    eslint.config.shared.js eslint-rules/local-rules.js
   git -C "$SRC" checkout --quiet "$GRIST_CORE_COMMIT"
 fi
 
@@ -67,6 +68,10 @@ mkdir -p "$HERE/public" "$HERE/locales"
 cp "$SRC/static/icons/icons.css" "$HERE/public/grist-icons.css"
 cp "$SRC/assets/locales/fr.client.json" "$SRC/assets/locales/en.client.json" "$HERE/locales/"
 cp "$SRC/LICENSE.txt" "$OUT/LICENSE.txt"
+# Configuration ESLint de Grist (eslint.config.js l'applique au code du hub).
+mkdir -p "$OUT/eslint-rules"
+cp "$SRC/eslint.config.shared.js" "$OUT/"
+cp "$SRC/eslint-rules/local-rules.js" "$OUT/eslint-rules/"
 echo "$GRIST_CORE_COMMIT" > "$OUT/COMMIT"
 
 # Mêmes versions de dépendances que grist-core, pour celles qu'importent les fichiers copiés.

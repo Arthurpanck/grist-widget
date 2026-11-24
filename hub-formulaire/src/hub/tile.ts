@@ -3,10 +3,12 @@
  * destination, et texte en dessous. Même rendu, et même taille, dans l'éditeur (Button.ts) et en
  * lecture (ButtonRenderer, dans FormRenderer.ts).
  */
+import { theme, vars } from "app/client/ui2018/cssVars";
+
+import { dom, DomContents, DomElementArg, makeTestId, styled } from "grainjs";
+
 import type { FormLayoutNode } from "app/client/components/FormRenderer";
 import type { HubContext } from "app/client/hub/HubContext";
-import { theme, vars } from "app/client/ui2018/cssVars";
-import { dom, DomContents, DomElementArg, makeTestId, styled } from "grainjs";
 
 const testId = makeTestId("test-hub-");
 

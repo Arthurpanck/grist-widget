@@ -9,7 +9,6 @@
  */
 import { allCommands } from "app/client/components/commands";
 import { FormLayoutNodeType } from "app/client/components/FormRenderer";
-import * as components from "app/client/components/Forms/elements";
 import { FormView } from "app/client/components/Forms/FormView";
 import { BoxModel, Place } from "app/client/components/Forms/Model";
 import { makeTestId, stopEvent } from "app/client/lib/domUtils";
@@ -38,9 +37,10 @@ interface Props {
  * Choix d'une destination : sous-menus des pages et des formulaires du document, puis site web.
  */
 export function destinationItems(view: FormView, choose: (dest: Destination) => void) {
-  const { pages, forms } = view.hub;
-  const pageItems = () => pages.get().length ?
-    pages.get().map(page => menus.menuItem(
+  const { forms } = view.hub;
+  const pages = () => view.hub.pages.get().filter(page => !page.hasHub);
+  const pageItems = () => pages().length ?
+    pages().map(page => menus.menuItem(
       () => choose({ kind: "page", target: page.id }),
       menus.menuIcon("Page"),
       page.name,
@@ -80,8 +80,7 @@ export function buildMenu(props: Props, ...args: IDomArgs<HTMLElement>): IDomArg
       const below = (el: NewBox) => () => { allCommands.insertFieldAfter.run(el); };
       const atEnd = (el: NewBox) => () => { allCommands.insertField.run(el); };
       const custom = props.insertBox ? (el: NewBox) => () => {
-        // Comme dans Grist : les blocs de structure viennent de elements.defaultElement.
-        const inserted = props.insertBox!("structure" in el ? components.defaultElement(el.structure) : view.newElement(el));
+        const inserted = props.insertBox!(view.newElement(el));
         view.selectedBox.set(inserted);
         return view.save();
       } : null;

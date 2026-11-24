@@ -1,13 +1,13 @@
 /**
  * Cale de Forms/Field : le hub n'a pas de questions (colonnes de table). Section et Columns testent
- * `instanceof FieldModel` en supprimant un bloc ; ici, aucun bloc n'en est un.
+ * `instanceof FieldModel` en supprimant un bloc ; ici, aucun bloc n'en est un. La classe de base des
+ * blocs n'est importée que comme type : l'importer pour de bon créerait une boucle d'imports
+ * (Model → elements → Columns → Field → Model).
  */
 import type { BoxModel } from "app/client/components/Forms/Model";
 import type { Observable } from "grainjs";
 
-export class FieldModel {
-  public leaf: Observable<number>;
-}
+/** Une question : un bloc lié à un champ de la table (leaf). */
+export type FieldModel = BoxModel & { leaf: Observable<number> };
 
-// Pour le typage : une question est un bloc (comme dans Grist, où FieldModel hérite de BoxModel).
-export interface FieldModel extends BoxModel {}
+export const FieldModel = class {} as unknown as new () => FieldModel;
