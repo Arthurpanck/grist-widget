@@ -1,8 +1,8 @@
 {
   "name": "@arthurpanck/widget-hub",
-  "description": "Hub de navigation : boutons vers les pages du document ou des liens externes, avec fond personnalisable (charte Métropole de Lyon).",
+  "description": "Hub de navigation : page d'accueil avec boutons vers les pages du document ou des liens, éditeur visuel guidé (charte Métropole de Lyon).",
   "homePage": "https://github.com/Arthurpanck/grist-widget/tree/master/hub",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "grist": {
     "name": "Hub de navigation",
     "url": "https://arthurpanck.github.io/grist-widget/hub/index.html",
@@ -10,7 +10,7 @@
     "published": true,
     "accessLevel": "full",
     "renderAfterReady": true,
-    "description": "Page d'accueil avec des boutons cliquables vers les pages du document ou des sites web, image de fond, logo et charte Métropole de Lyon.",
+    "description": "Page d'accueil avec des boutons vers les pages du document ou des sites web. Modèles prêts à l'emploi, éditeur visuel, fond image, charte Métropole de Lyon.",
     "authors": [
       {
         "name": "Arthurpanck",
