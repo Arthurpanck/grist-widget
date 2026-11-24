@@ -1,0 +1,24 @@
+{
+  "name": "@arthurpanck/widget-hub-formulaire",
+  "private": true,
+  "description": "Variante du hub de navigation construite avec l'éditeur de formulaires de Grist (code copié de grist-core).",
+  "version": "0.1.0",
+  "scripts": {
+    "sync": "bash tools/sync-grist.sh",
+    "build": "node tools/build.mjs"
+  },
+  "dependencies": {
+    "dompurify": "3.4.17",
+    "grainjs": "1.1.0",
+    "knockout": "3.5.0",
+    "lodash": "4.18.1",
+    "marked": "14.0.0",
+    "mousetrap": "1.6.2",
+    "popweasel": "0.2.0",
+    "underscore": "1.13.8",
+    "uuid": "14.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}
