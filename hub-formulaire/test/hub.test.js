@@ -134,22 +134,17 @@ describe("Éditeur", () => {
     await page.close();
   });
 
-  it("ajoute une section ci-dessus ou ci-dessous, comme le Formulaire, et en bas de page", async () => {
+  it("ajoute une section ci-dessus ou ci-dessous depuis le « + » d'une section, comme le Formulaire", async () => {
     const { page, frame } = await openHub();
-    const sections = async () => (await savedLayout(page)).children.map(c => c.type).filter(t => t === "Section");
-    // « + » d'une section (Forms/Section.ts), visible au survol.
+    const sections = async () => (await savedLayout(page)).children.filter(c => c.type === "Section");
+    // « + » d'une section (Forms/Section.ts, code du Formulaire), visible au survol.
     for (const where of ["ci-dessous", "ci-dessus"]) {
       await frame.locator(".test-forms-Section").first().hover();
       await frame.locator(".test-forms-plus").first().click();
       await frame.locator(".grist-floating-menu li", { hasText: `Ajouter une section ${where}` }).click();
     }
     assert.equal((await sections()).length, 3);
-    // « + » en bas de page : une section à la fin.
-    await frame.locator(".test-hub-add-block .test-forms-plus, .test-hub-add-block div").last().click();
-    await frame.locator(".test-hub-add-section").click();
-    const layout = await savedLayout(page);
-    assert.equal((await sections()).length, 4);
-    assert.equal(layout.children.at(-1).type, "Section");
+    assert.equal(await frame.locator(".test-forms-Section").count(), 3);
     await page.close();
   });
 

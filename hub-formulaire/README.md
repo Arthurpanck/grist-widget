@@ -20,10 +20,10 @@ affichés ; « Vers un site web » ajoute un lien externe.
 2. Un hub vide s'ouvre directement dans l'éditeur. Ensuite, on y revient par **Ouvrir la
    configuration** dans le menu ⋮ du widget.
 3. Pour composer la page :
-   - le **+** vert, ou une case « Colonne » vide, ajoute un bouton (choisissez la page ou le
+   - le **+** vert d'une section, ou une case « Colonne » vide, ajoute un bouton (choisissez la page ou le
      formulaire dans le sous-menu) ou un bloc ;
    - le **+** d'une section (au survol) ajoute une section ci-dessus ou ci-dessous, comme dans le
-     Formulaire ; celui du bas de page ajoute une section à la fin ;
+     Formulaire ;
    - un clic sélectionne un bloc ; sur un bloc sélectionné, un clic sur un texte le modifie, comme
      le libellé d'une question (Entrée enregistre, Échap annule) ;
    - le clic droit ouvre le menu : insérer au-dessus ou en dessous, supprimer ;
