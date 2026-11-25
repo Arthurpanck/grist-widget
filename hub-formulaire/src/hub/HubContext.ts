@@ -4,6 +4,8 @@
  * (HubView.hub) et au rendu en lecture (FormRendererContext.hub), comme Grist transmet les champs
  * d'un formulaire.
  */
+import { DESTINATIONS } from "app/client/hub/destinations";
+
 import { Disposable, Observable } from "grainjs";
 
 import type { FormLayoutNode } from "app/client/components/FormRenderer";
@@ -18,10 +20,9 @@ export interface PageInfo {
 export interface FormInfo {
   id: number;
   name: string;
-  page: string;
 }
 
-export interface ButtonLink {
+interface ButtonLink {
   href: string;
   target: "_top" | "_blank";
 }
@@ -42,18 +43,20 @@ export class HubContext extends Disposable {
     if (!this.loaded.get()) {
       return layout;
     }
-    const pageIds = new Set(this.pages.get().map(page => page.id));
-    const formIds = new Set(this.forms.get().map(form => form.id));
+    const existing = {
+      page: new Set(this.pages.get().map(page => page.id)),
+      form: new Set(this.forms.get().map(form => form.id)),
+    };
     const clean = (node: FormLayoutNode): FormLayoutNode => {
       const copy = { ...node };
       if (node.children) {
         copy.children = node.children.map(clean);
       }
-      if (node.type === "Button" && node.kind === "page" && node.page && !pageIds.has(node.page)) {
-        copy.page = null;
-      }
-      if (node.type === "Button" && node.kind === "form" && node.form && !formIds.has(node.form)) {
-        copy.form = null;
+      if (node.type === "Button" && (node.kind === "page" || node.kind === "form")) {
+        const target = node[node.kind];
+        if (target && !existing[node.kind].has(target)) {
+          copy[node.kind] = null;
+        }
       }
       return copy;
     };
@@ -64,18 +67,8 @@ export class HubContext extends Disposable {
    * Texte du bouton : celui saisi, sinon le nom de sa destination.
    */
   public labelOf(button: FormLayoutNode): string {
-    const own = button.label?.trim();
-    if (own) {
-      return own;
-    }
-    switch (button.kind) {
-      case "form":
-        return this.forms.get().find(f => f.id === button.form)?.name || "Formulaire à choisir";
-      case "url":
-        return hostOf(button.url) || "Site web à choisir";
-      default:
-        return this.pages.get().find(p => p.id === button.page)?.name || "Page à choisir";
-    }
+    const kind = button.kind || "page";
+    return button.label?.trim() || this._destinationName(button) || DESTINATIONS[kind].missing;
   }
 
   /**
@@ -95,12 +88,20 @@ export class HubContext extends Disposable {
     }
     return button.page ? { href: `${base}/p/${button.page}`, target: "_top" } : null;
   }
+
+  private _destinationName(button: FormLayoutNode): string | undefined {
+    switch (button.kind) {
+      case "form": return this.forms.get().find(form => form.id === button.form)?.name;
+      case "url": return hostOf(button.url);
+      default: return this.pages.get().find(page => page.id === button.page)?.name;
+    }
+  }
 }
 
 /**
  * Adresse d'un site web : complétée par https:// si besoin ; seuls http(s), mailto et tel sont acceptés.
  */
-export function safeUrl(url?: string): string {
+function safeUrl(url?: string): string {
   let value = (url || "").trim();
   if (!value) {
     return "";

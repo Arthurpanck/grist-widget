@@ -1,6 +1,7 @@
-/* global window, document */  // utilisés dans le navigateur (page.evaluate, addInitScript)
+/* global window */  // utilisés dans le navigateur (page.evaluate, addInitScript)
 // Outils des tests : ouvre le widget dans Chromium (Playwright), dans une page qui imite Grist
 // (le widget dans un cadre, faux grist-plugin-api), avec un document fictif.
+const assert = require("node:assert/strict");
 const path = require("path");
 
 const { chromium } = require("playwright");
@@ -8,6 +9,9 @@ const { chromium } = require("playwright");
 const ROOT = path.join(__dirname, "..");
 const ORIGIN = "http://hub.test";
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
+
+/** Options d'un widget personnalisé chargé depuis cette adresse, telles que Grist les enregistre. */
+const customSection = url => JSON.stringify({ customView: JSON.stringify({ mode: "url", url }) });
 
 /**
  * Document fictif : « Accueil » contient le hub, « Signalements » un formulaire.
@@ -20,12 +24,12 @@ const DOC = {
     parentId: [1, 2, 5],
     parentKey: ["custom", "record", "form"],
     title: ["", "", "Signaler un incident"],
-    options: ['{"customView":"{\\"url\\":\\"https://x/hub-formulaire/index.html\\"}"}', "", ""],
+    options: [customSection(`${ORIGIN}/index.html`), "", ""],
   },
 };
 
 /**
- * Mise en page d'un hub : un titre, puis une rubrique avec les boutons donnés en colonnes.
+ * Mise en page d'un hub : un titre, puis une section avec les boutons donnés en colonnes.
  */
 function hubLayout(...buttons) {
   return {
@@ -51,11 +55,11 @@ async function stopBrowser() {
 }
 
 /**
- * Ouvre le widget. Options : layout (mise en page enregistrée), readonly, access, tables,
- * width (largeur du cadre), scale (densité de pixels, pour des captures). Renvoie la page, le cadre du widget et les erreurs de la console.
+ * Ouvre le widget. Options : layout (mise en page enregistrée), readonly, access, tables, width
+ * (largeur du cadre). Renvoie la page, le cadre du widget et les erreurs de la console.
  */
-async function openHub({ layout = null, readonly = false, access = "full", tables = DOC, width = 1280, scale = 1 } = {}) {
-  const page = await browser.newPage({ viewport: { width, height: 800 }, deviceScaleFactor: scale });
+async function openHub({ layout = null, readonly = false, access = "full", tables = DOC, width = 1280 } = {}) {
+  const page = await browser.newPage({ viewport: { width, height: 800 } });
   const errors = [];
   page.on("pageerror", e => errors.push(e.message));
   page.on("console", (m) => {
@@ -88,19 +92,43 @@ async function openHub({ layout = null, readonly = false, access = "full", table
     return route.fulfill({ status: 404, body: "" });
   });
   await page.goto(`${ORIGIN}/grist.html`);
-  // Le widget est affiché quand son élément racine s'ajoute au script dans <body>.
-  await page.waitForFunction(() => document.querySelector("iframe").contentDocument?.body?.children.length >= 2);
+  // Le widget est prêt quand il a reçu ses options et le document (ou le refus d'y accéder).
+  await page.waitForFunction(() => window.__optionsSent && window.__documentRead);
   const frame = await (await page.$("iframe")).contentFrame();
-  await page.waitForTimeout(500);
   return { page, frame, errors };
 }
 
 /**
- * Mise en page enregistrée par le widget dans ses options (après le délai d'enregistrement).
+ * Ferme le widget ; le scénario échoue s'il a provoqué une erreur dans la console.
  */
-async function savedLayout(page) {
-  await page.waitForTimeout(500);
+async function closeHub({ page, errors }) {
+  assert.deepEqual(errors, [], "erreurs dans la console du navigateur");
+  await page.close();
+}
+
+/**
+ * Mise en page enregistrée par le widget dans ses options.
+ */
+function savedLayout(page) {
   return page.evaluate(() => window.__savedOptions?.layout);
+}
+
+/**
+ * Relance une vérification jusqu'à ce qu'elle passe, comme waitToPass dans les tests de Grist :
+ * l'interface et l'enregistrement se mettent à jour un court instant après une action.
+ */
+async function waitToPass(check, timeoutMs = 3000) {
+  const start = Date.now();
+  for (;;) {
+    try {
+      return await check();
+    } catch (err) {
+      if (Date.now() - start > timeoutMs) {
+        throw err;
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
 }
 
 /**
@@ -118,4 +146,4 @@ function buttonsOf(layout) {
   return all;
 }
 
-module.exports = { startBrowser, stopBrowser, openHub, savedLayout, buttonsOf, hubLayout };
+module.exports = { startBrowser, stopBrowser, openHub, closeHub, savedLayout, waitToPass, buttonsOf, hubLayout };

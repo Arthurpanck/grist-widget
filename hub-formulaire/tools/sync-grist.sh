@@ -7,8 +7,13 @@
 #   bash tools/sync-grist.sh [chemin/vers/grist-core]
 #
 # Sans argument, grist-core est récupéré (clone partiel) au commit indiqué ci-dessous.
-# Seuls 4 fichiers ne sont pas copiés, car liés au document Grist ouvert : src/shims/ les fournit
-# (voir README.md).
+# Les fichiers liés au document Grist ouvert ne sont pas copiés : src/shims/ les remplace ou en fournit
+# une version adaptée (voir README.md).
+#
+# Si grist-core a modifié un fichier dont le hub garde une version adaptée, la copie s'arrête avant de
+# rien changer. Après avoir reporté ces modifications, validez la nouvelle version de référence :
+#
+#   ACCEPT_ADAPTED=1 bash tools/sync-grist.sh [chemin/vers/grist-core]
 set -euo pipefail
 
 GRIST_CORE_COMMIT=cc110ed0fec59e63a7d4019c2e50dcea6c7a8421
@@ -41,6 +46,15 @@ STOPS=(
   app/client/components/Forms/elements
 )
 
+# Fichiers de grist-core dont le hub garde une version adaptée (src/shims/…/Menu.ts et elements.ts)
+# ou reprend la logique (HubView.ts d'après FormView.ts, Button.ts d'après Field.ts).
+ADAPTED=(
+  app/client/components/Forms/Menu.ts
+  app/client/components/Forms/elements.ts
+  app/client/components/Forms/FormView.ts
+  app/client/components/Forms/Field.ts
+)
+
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$HERE/src/grist"
 SRC="${1:-}"
@@ -55,6 +69,15 @@ if [ -z "$SRC" ]; then
   git -C "$SRC" checkout --quiet "$GRIST_CORE_COMMIT"
 fi
 
+# Les fichiers adaptés par le hub ont-ils changé dans grist-core depuis leur adaptation ?
+if [ -n "${ACCEPT_ADAPTED:-}" ]; then
+  (cd "$SRC" && sha256sum "${ADAPTED[@]}") > "$HERE/tools/adapted-from.sha256"
+elif ! (cd "$SRC" && sha256sum --quiet --check "$HERE/tools/adapted-from.sha256") >&2; then
+  echo "Ces fichiers ont changé dans grist-core depuis que le hub les a adaptés. Reportez leurs" >&2
+  echo "modifications dans src/shims/ et src/hub/, puis relancez avec ACCEPT_ADAPTED=1." >&2
+  exit 1
+fi
+
 rm -rf "$OUT" && mkdir -p "$OUT"
 join() { local IFS=,; echo "$*"; }
 COUNT=$(node "$HERE/tools/copy-closure.mjs" "$SRC" "$OUT" "$(join "${ENTRIES[@]}")" "$(join "${STOPS[@]}")")
@@ -64,9 +87,10 @@ COUNT=$(node "$HERE/tools/copy-closure.mjs" "$SRC" "$OUT" "$(join "${ENTRIES[@]}
 # Columns.ts (« Column 2 ») traduit. Si grist-core a changé à ces endroits, patch échoue et s'arrête.
 patch --quiet --forward --strip=1 --directory="$OUT" < "$HERE/tools/grist.patch"
 
-mkdir -p "$HERE/public" "$HERE/locales"
+mkdir -p "$HERE/public" "$OUT/locales"
 cp "$SRC/static/icons/icons.css" "$HERE/public/grist-icons.css"
-cp "$SRC/assets/locales/fr.client.json" "$SRC/assets/locales/en.client.json" "$HERE/locales/"
+# Traductions complètes de Grist ; tools/build.mjs n'en publie que la partie utilisée (locales/).
+cp "$SRC/assets/locales/fr.client.json" "$SRC/assets/locales/en.client.json" "$OUT/locales/"
 cp "$SRC/LICENSE.txt" "$OUT/LICENSE.txt"
 # Configuration ESLint de Grist (eslint.config.js l'applique au code du hub).
 mkdir -p "$OUT/eslint-rules"
@@ -87,7 +111,8 @@ node -e '
     const src = fs.readFileSync(p, "utf8").replace(/^import type[^;]*;/gm, "");
     for (const m of src.matchAll(/(?:from\s+|^import\s+|require\()["\x27]([^."\x27][^"\x27]*)["\x27]/gm)) {
       const name = m[1].startsWith("@") ? m[1].split("/").slice(0, 2).join("/") : m[1].split("/")[0];
-      if (name !== "app" && all[name]) { used.add(name); }
+      // Les outils (ESLint…) restent dans devDependencies, où ils sont déjà.
+      if (name !== "app" && all[name] && !pkg.devDependencies[name]) { used.add(name); }
     }
   });
   walk(process.argv[3]);

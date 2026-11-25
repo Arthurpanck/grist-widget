@@ -3,7 +3,7 @@
 // Les imports de type (« import type ») et les imports dynamiques (« import(...) », chargés à la
 // demande par Grist : pages d'administration, document, éditeur de code, graphiques…) ne sont pas
 // suivis ; le hub n'emprunte jamais ces chemins (voir tools/build.mjs).
-// Les « arrêts » sont fournis par src/shims (les 4 fichiers liés au document Grist).
+// Les « arrêts » sont fournis par src/shims (fichiers liés au document Grist, remplacés ou adaptés).
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 

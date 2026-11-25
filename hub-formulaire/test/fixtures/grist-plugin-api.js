@@ -16,7 +16,10 @@
     },
     onOptions(callback) {
       onOptions = callback;
-      setTimeout(() => callback(options, settings), 30);
+      setTimeout(() => {
+        callback(options, settings);
+        top.__optionsSent = true;
+      }, 30);
     },
     async setOption(key, value) {
       options = { ...options, [key]: value };
@@ -26,14 +29,14 @@
     docApi: {
       async fetchTable(tableId) {
         if (settings.accessLevel !== "full") {
+          top.__documentRead = true;
           throw new Error("Access denied");
         }
         return tables[tableId];
       },
       async getAccessToken() {
-        if (settings.accessLevel !== "full") {
-          throw new Error("Access denied");
-        }
+        // Dernier appel du widget quand il lit le document.
+        setTimeout(() => { top.__documentRead = true; }, 0);
         return { token: "t", baseUrl: "https://grist.test/o/docs/api/docs/DOC123", ttlMsecs: 1000 };
       },
     },

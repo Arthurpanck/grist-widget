@@ -3,6 +3,7 @@
  * destination, et texte en dessous. Même rendu, et même taille, dans l'éditeur (Button.ts) et en
  * lecture (ButtonRenderer, dans FormRenderer.ts).
  */
+import { DESTINATIONS } from "app/client/hub/destinations";
 import { theme, vars } from "app/client/ui2018/cssVars";
 
 import { dom, DomContents, DomElementArg, makeTestId, styled } from "grainjs";
@@ -12,11 +13,8 @@ import type { HubContext } from "app/client/hub/HubContext";
 
 const testId = makeTestId("test-hub-");
 
-/** Icône de la tuile, selon la destination. */
-const ICONS = { page: "📄", form: "📝", url: "🌐" };
-
-/** Texte de la tuile : par défaut, le libellé et la description ; l'éditeur fournit les siens. */
-export interface TileText {
+/** Texte de la tuile : le libellé et la description en lecture ; l'éditeur fournit les siens. */
+interface TileText {
   label: DomContents;
   description: DomContents;
 }
@@ -40,8 +38,8 @@ export function buttonLink(button: FormLayoutNode, hub: HubContext) {
   if (!link) {
     return cssTile(
       buildTileContent(button, text),
-      dom.style("opacity", "0.55"),
-      dom.attr("title", "Destination à choisir"),
+      cssTile.cls("-disabled"),
+      dom.attr("title", DESTINATIONS[button.kind || "page"].missing),
     );
   }
   return cssTileLink(
@@ -53,8 +51,8 @@ export function buttonLink(button: FormLayoutNode, hub: HubContext) {
 
 function buildTileContent(button: FormLayoutNode, text: TileText) {
   return [
-    dom.cls("hub-tile"),
-    cssTileIcon(ICONS[button.kind || "page"], testId("icon")),
+    testId("tile"),
+    cssTileIcon(DESTINATIONS[button.kind || "page"].icon, testId("icon")),
     cssTileText(text.label, text.description),
   ];
 }
@@ -81,6 +79,9 @@ const tileCss = `
   a&:focus-visible {
     outline: 2px solid ${vars.primaryBg};
     outline-offset: 2px;
+  }
+  &-disabled {
+    opacity: 0.55;
   }
 `;
 

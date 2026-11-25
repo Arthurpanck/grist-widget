@@ -12,6 +12,7 @@ import { BoxModel, LayoutModel, Place } from "app/client/components/Forms/Model"
 import * as style from "app/client/components/Forms/styles";
 import { Button } from "app/client/hub/Button";
 import { HubContext } from "app/client/hub/HubContext";
+import { HUB_MAX_WIDTH } from "app/client/hub/HubPage";
 import { reportError } from "app/client/models/errors";
 import { cssButton } from "app/client/ui2018/buttons";
 
@@ -39,6 +40,7 @@ export class HubView extends Disposable {
   ) {
     super();
 
+    // Sélection : reprise telle quelle de FormView, avec ses commentaires d'origine.
     // We will store selected box here.
     const selectedBox = Observable.create(this, null as BoxModel | null);
 
@@ -93,8 +95,7 @@ export class HubView extends Disposable {
     if ("structure" in what) {
       return components.defaultElement(what.structure);
     }
-    const dest = what.button;
-    return Button(dest.kind, dest.kind === "url" ? null : dest.target);
+    return Button(what.button, what.target);
   }
 
   /**
@@ -146,7 +147,11 @@ export class HubView extends Disposable {
           dom("div", "Terminé"),
           cssButton.cls("-primary"),
           dom.style("margin-left", "auto"), // à droite, comme « Publier »
-          dom.on("click", () => this._onDone()),
+          dom.on("click", (ev) => {
+            // Le clic ne doit pas remonter jusqu'à la page : l'éditeur vient d'être fermé.
+            ev.stopPropagation();
+            this._onDone();
+          }),
           testId("done"),
         ),
       ),
@@ -174,6 +179,6 @@ const cssHubEditor = styled("div", `
 const cssWideForm = styled("div", `
   & > div {
     width: 100%;
-    max-width: 960px;
+    max-width: ${HUB_MAX_WIDTH};
   }
 `);

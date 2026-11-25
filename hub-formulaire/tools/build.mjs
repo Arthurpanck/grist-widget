@@ -8,7 +8,7 @@
 // modules vides au lieu d'être embarqués.
 import { build } from "esbuild";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -39,7 +39,8 @@ const gristPaths = {
   },
 };
 
-await build({
+const result = await build({
+  absWorkingDir: ROOT,
   entryPoints: [join(ROOT, "src/hub/main.ts")],
   bundle: true,
   format: "iife",
@@ -54,6 +55,7 @@ await build({
   mainFields: ["module", "main"],
   define: { "process.env.NODE_ENV": '"production"' },
   logLevel: "info",
+  metafile: true,
 });
 console.log(`Chargés à la demande par Grist, non embarqués (${emptied.size}) : ${[...emptied].sort().join(", ")}`);
 
@@ -65,3 +67,19 @@ const indexFile = join(ROOT, "index.html");
 const index = readFileSync(indexFile, "utf8").replace(/dist\/hub\.js(\?v=[0-9a-f]*)?"/, `dist/hub.js?v=${version}"`);
 writeFileSync(indexFile, index);
 console.log(`index.html charge dist/hub.js?v=${version}`);
+
+// Traductions de Grist : seuls les groupes de textes qu'utilisent les fichiers embarqués (leur
+// `makeT("Groupe")`) sont publiés dans locales/, au lieu des traductions de toute l'application.
+const scopes = new Set();
+for (const file of Object.keys(result.metafile.inputs).filter(f => existsSync(join(ROOT, f)))) {
+  for (const match of readFileSync(join(ROOT, file), "utf8").matchAll(/makeT\(["']([^"']+)["']/g)) {
+    scopes.add(match[1]);
+  }
+}
+mkdirSync(join(ROOT, "locales"), { recursive: true });
+for (const name of readdirSync(join(ROOT, "src/grist/locales"))) {
+  const all = JSON.parse(readFileSync(join(ROOT, "src/grist/locales", name), "utf8"));
+  const used = Object.fromEntries(Object.entries(all).filter(([scope]) => scopes.has(scope)));
+  writeFileSync(join(ROOT, "locales", name), JSON.stringify(used) + "\n");
+}
+console.log(`Traductions publiées : ${scopes.size} groupes de textes sur ceux de Grist.`);

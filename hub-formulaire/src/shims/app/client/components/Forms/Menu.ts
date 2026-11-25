@@ -1,103 +1,132 @@
 /**
  * Menu « + » et menu contextuel des blocs.
  *
- * Adapté de grist-core app/client/components/Forms/Menu.ts (Apache-2.0) : même structure, mêmes
- * commandes et mêmes composants de menu. Le groupe « Nouvelle question », qui ajoute des colonnes à
- * une table, devient « Nouveau bouton » : des sous-menus listent les pages et les formulaires du
- * document, comme Grist liste les champs non affichés. Le menu contextuel garde Insérer et
- * Supprimer, sans Copier, Couper, Coller.
+ * Adapté de grist-core app/client/components/Forms/Menu.ts (Apache-2.0). Tout ce qui ne concerne
+ * pas les questions est repris tel quel, avec ses commentaires et ses traductions d'origine. Deux
+ * changements :
+ * - le groupe « Nouvelle question », qui ajoute des colonnes à une table, devient « Nouveau bouton » :
+ *   des sous-menus listent les pages et les formulaires du document, comme Grist liste les champs
+ *   non affichés ;
+ * - le menu contextuel garde Insérer et Supprimer, sans Copier, Couper, Coller.
  */
 import { allCommands } from "app/client/components/commands";
 import { FormLayoutNodeType } from "app/client/components/FormRenderer";
 import { FormView } from "app/client/components/Forms/FormView";
 import { BoxModel, Place } from "app/client/components/Forms/Model";
+import { ButtonKind, DESTINATIONS } from "app/client/hub/destinations";
 import { makeTestId, stopEvent } from "app/client/lib/domUtils";
 import { FocusLayer } from "app/client/lib/FocusLayer";
+import { makeT } from "app/client/lib/localization";
 import * as menus from "app/client/ui2018/menus";
 
 import { dom, IDomArgs } from "grainjs";
 
+const t = makeT("Menu");
 const testId = makeTestId("test-forms-menu-");
 
-/** Destination d'un bouton : une page ou un formulaire du document, ou un site web. */
-export type Destination = { kind: "page" | "form", target: number } | { kind: "url" };
-
-// Nouveau bloc : un bouton (vers une destination) ou un bloc de structure.
-export type NewBox = { button: Destination } | { structure: FormLayoutNodeType };
+// New box to add, either a new button (to a page, a form or a website), or a structure.
+export type NewBox = { button: ButtonKind, target: number | null } | { structure: FormLayoutNodeType };
 
 interface Props {
+  /**
+   * If this menu was shown as a result of clicking on a box. This box will be selected.
+   */
   box?: BoxModel;
+  /**
+   * Parent view (to access GristDoc/selectedBox and others, TODO: this should be turned into events)
+   */
   view?: FormView;
+  /**
+   * Whether this is context menu, so move `Copy` etc in front, and nest new items in its own menu.
+   */
   context?: boolean;
+  /**
+   * Custom menu items to be added at the bottom (below additional separator).
+   */
   customItems?: Element[],
+  /**
+   * Custom logic of finding right spot to insert the new box.
+   */
   insertBox?: Place,
-}
-
-/**
- * Choix d'une destination : sous-menus des pages et des formulaires du document, puis site web.
- */
-export function destinationItems(view: FormView, choose: (dest: Destination) => void) {
-  const { forms } = view.hub;
-  const pages = () => view.hub.pages.get().filter(page => !page.hasHub);
-  const pageItems = () => pages().length ?
-    pages().map(page => menus.menuItem(
-      () => choose({ kind: "page", target: page.id }),
-      menus.menuIcon("Page"),
-      page.name,
-      testId("page-item"),
-    )) :
-    [menus.menuText("Aucune page dans ce document")];
-  const formItems = () => forms.get().length ?
-    forms.get().map(form => menus.menuItem(
-      () => choose({ kind: "form", target: form.id }),
-      menus.menuIcon("Pencil"),
-      form.name,
-      testId("form-item"),
-    )) :
-    [menus.menuText("Aucun formulaire dans ce document")];
-  return [
-    menus.menuItemSubmenu(pageItems, {}, menus.menuIcon("Page"), "Vers une page", testId("button-page")),
-    menus.menuItemSubmenu(formItems, {}, menus.menuIcon("Pencil"), "Vers un formulaire", testId("button-form")),
-    menus.menuItem(() => choose({ kind: "url" }), menus.menuIcon("World"), "Vers un site web", testId("button-url")),
-  ];
 }
 
 export function buildMenu(props: Props, ...args: IDomArgs<HTMLElement>): IDomArgs<HTMLElement> {
   const { box, context, customItems } = props;
   const view = box?.view ?? props.view;
   if (!view) { throw new Error("No view provided"); }
+  const hub = view.hub;
 
-  // Dans une colonne, on n'insère pas au-dessus ou en dessous (comme dans Grist).
+  // If we are in a column, then we can't insert a new column.
   const disableInsert = box?.parent?.type === "Columns" && box.type !== "Placeholder";
 
   return [
     menus.menu((ctl) => {
       box?.view.selectedBox.set(box);
 
+      // Same for structure.
       const struct = (structure: FormLayoutNodeType) => ({ structure });
 
-      const above = (el: NewBox) => () => { allCommands.insertFieldBefore.run(el); };
-      const below = (el: NewBox) => () => { allCommands.insertFieldAfter.run(el); };
-      const atEnd = (el: NewBox) => () => { allCommands.insertField.run(el); };
+      // Actions:
+
+      // Insert field before and after.
+      const above = (el: NewBox) => () => {
+        allCommands.insertFieldBefore.run(el);
+      };
+      const below = (el: NewBox) => () => {
+        allCommands.insertFieldAfter.run(el);
+      };
+      const atEnd = (el: NewBox) => () => {
+        allCommands.insertField.run(el);
+      };
       const custom = props.insertBox ? (el: NewBox) => () => {
-        const inserted = props.insertBox!(view.newElement(el));
-        view.selectedBox.set(inserted);
+        // Comme une nouvelle question dans Grist (addNewQuestion), le bloc ajouté est sélectionné.
+        view.selectedBox.set(props.insertBox!(view.newElement(el)));
         return view.save();
       } : null;
 
-      const insertMenu = (where: typeof above) => () => [
-        menus.menuGroup("Nouveau bouton", ...destinationItems(view, dest => where({ button: dest })())),
-        menus.menuDivider(),
-        menus.menuGroup(
-          "Blocs",
-          menus.menuItem(where(struct("Header")), menus.menuIcon("Headband"), "En-tête"),
-          menus.menuItem(where(struct("Paragraph")), menus.menuIcon("Paragraph"), "Paragraphe"),
-          menus.menuItem(where(struct("Columns")), menus.menuIcon("Columns"), "Colonnes"),
-          menus.menuItem(where(struct("Separator")), menus.menuIcon("Separator"), "Séparateur"),
-        ),
-        props.customItems ? menus.menuDivider() : null,
-        ...(props.customItems ?? []),
-      ];
+      // Sous-menu d'un type de destination : les pages ou les formulaires du document.
+      const targets = (where: typeof above, kind: "page" | "form", list: () => { id: number, name: string }[]) =>
+        menus.menuItemSubmenu(
+          () => list().length ?
+            list().map(({ id, name }) => menus.menuItem(
+              where({ button: kind, target: id }),
+              menus.menuIcon(DESTINATIONS[kind].menuIcon),
+              name,
+              testId(`${kind}-item`),
+            )) :
+            [menus.menuText(DESTINATIONS[kind].menuEmpty ?? "")],
+          {},
+          menus.menuIcon(DESTINATIONS[kind].menuIcon),
+          DESTINATIONS[kind].menuLabel,
+          testId(`button-${kind}`),
+        );
+
+      const insertMenu = (where: typeof above) => () => {
+        return [
+          menus.menuGroup(
+            "Nouveau bouton",
+            targets(where, "page", () => hub.pages.get().filter(page => !page.hasHub)),
+            targets(where, "form", () => hub.forms.get()),
+            menus.menuItem(
+              where({ button: "url", target: null }),
+              menus.menuIcon(DESTINATIONS.url.menuIcon),
+              DESTINATIONS.url.menuLabel,
+              testId("button-url"),
+            ),
+          ),
+          menus.menuDivider(),
+          menus.menuGroup(
+            t("Building blocks"),
+            menus.menuItem(where(struct("Header")), menus.menuIcon("Headband"), t("Header")),
+            menus.menuItem(where(struct("Paragraph")), menus.menuIcon("Paragraph"), t("Paragraph")),
+            menus.menuItem(where(struct("Columns")), menus.menuIcon("Columns"), t("Columns")),
+            menus.menuItem(where(struct("Separator")), menus.menuIcon("Separator"), t("Separator")),
+          ),
+
+          props.customItems ? menus.menuDivider() : null,
+          ...(props.customItems ?? []),
+        ];
+      };
 
       if (!props.context && !disableInsert) {
         return insertMenu(custom ?? atEnd)();
@@ -105,12 +134,12 @@ export function buildMenu(props: Props, ...args: IDomArgs<HTMLElement>): IDomArg
 
       return [
         disableInsert ? null : [
-          menus.menuItemSubmenu(insertMenu(above), {}, "Insérer au-dessus"),
-          menus.menuItemSubmenu(insertMenu(below), {}, "Insérer en dessous"),
+          menus.menuItemSubmenu(insertMenu(above), {}, "Insérer ci-dessus"),
+          menus.menuItemSubmenu(insertMenu(below), {}, "Insérer ci-dessous"),
           menus.menuDivider(),
         ],
         menus.menuItemCmd(allCommands.deleteFields, "Supprimer"),
-        (elem: HTMLElement) => void FocusLayer.create(ctl, { defaultFocusElem: elem, pauseMousetrap: true }),
+        elem => void FocusLayer.create(ctl, { defaultFocusElem: elem, pauseMousetrap: true }),
         customItems?.length ? menus.menuDivider(dom.style("min-width", "200px")) : null,
         ...(customItems ?? []),
         ...args,

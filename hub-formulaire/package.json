@@ -1,13 +1,30 @@
 {
   "name": "@arthurpanck/widget-hub-formulaire",
   "private": true,
-  "description": "Variante du hub de navigation construite avec l'éditeur de formulaires de Grist (code copié de grist-core).",
+  "description": "Hub de navigation construit avec l'éditeur de formulaires de Grist : page d'accueil avec des boutons vers les pages, les formulaires du document ou des sites web.",
+  "homePage": "https://github.com/Arthurpanck/grist-widget/tree/master/hub-formulaire",
   "version": "0.1.0",
+  "grist": {
+    "name": "Hub de navigation (façon formulaire)",
+    "url": "https://arthurpanck.github.io/grist-widget/hub-formulaire/index.html",
+    "widgetId": "@arthurpanck/widget-hub-formulaire",
+    "published": true,
+    "accessLevel": "full",
+    "renderAfterReady": true,
+    "description": "Page d'accueil avec des boutons vers les pages, les formulaires du document ou des sites web. Se compose comme un formulaire de Grist : sections, colonnes, paragraphes.",
+    "authors": [
+      {
+        "name": "Arthurpanck",
+        "url": "https://github.com/Arthurpanck"
+      }
+    ]
+  },
   "scripts": {
     "sync": "bash tools/sync-grist.sh",
     "build": "node tools/build.mjs",
     "check": "tsc -p tsconfig.json",
     "lint": "eslint --max-warnings=0 .",
+    "pretest": "node tools/build.mjs",
     "test": "node --test --test-concurrency=1 test/hub.test.js"
   },
   "dependencies": {

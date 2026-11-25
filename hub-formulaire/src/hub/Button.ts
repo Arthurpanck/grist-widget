@@ -12,6 +12,7 @@ import { buildEditor } from "app/client/components/Forms/Editor";
 import { FormView } from "app/client/components/Forms/FormView";
 import { BoxModel } from "app/client/components/Forms/Model";
 import * as css from "app/client/components/Forms/styles";
+import { ButtonKind } from "app/client/hub/destinations";
 import { buttonTile, cssTileDesc, cssTileLabel } from "app/client/hub/tile";
 import { stopEvent } from "app/client/lib/domUtils";
 import { reportError } from "app/client/models/errors";
@@ -27,7 +28,8 @@ const testId = makeTestId("test-hub-");
 /** Textes modifiables d'un bouton. */
 type ButtonText = "label" | "description" | "url";
 
-const BUTTON_PROPS = ["label", "description", "kind", "page", "form", "url"] as const;
+/** Champs d'un bouton : ceux que pose Button(), à part l'identifiant et le type du bloc. */
+const BUTTON_PROPS = Object.keys(Button("page", null)).filter(key => key !== "id" && key !== "type");
 
 export class ButtonModel extends BoxModel {
   /** Texte en cours de modification, s'il y en a un. */
@@ -175,7 +177,7 @@ export class ButtonModel extends BoxModel {
   }
 }
 
-export function Button(kind: "page" | "form" | "url" = "page", target: number | null = null): FormLayoutNode {
+export function Button(kind: ButtonKind, target: number | null): FormLayoutNode {
   return {
     id: uuidv4(),
     type: "Button",

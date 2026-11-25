@@ -1,0 +1,47 @@
+# Contrôles du widget hub-formulaire, à chaque modification de son dossier : types, style, tests, et
+# vérification que les fichiers construits et versionnés correspondent bien aux sources.
+name: Hub (façon formulaire)
+
+on:
+  push:
+    paths:
+      - "hub-formulaire/**"
+      - ".github/workflows/hub-formulaire.yml"
+  pull_request:
+    paths:
+      - "hub-formulaire/**"
+      - ".github/workflows/hub-formulaire.yml"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hub-formulaire
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hub-formulaire/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install the browser used by the tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Check types
+        run: npm run check
+
+      - name: Check style
+        run: npm run lint
+
+      - name: Build and test
+        run: npm test
+
+      - name: Check that the committed build matches the sources
+        run: git diff --exit-code -- dist index.html locales
