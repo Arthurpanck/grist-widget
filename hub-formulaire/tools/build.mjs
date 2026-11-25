@@ -7,7 +7,8 @@
 // de code, graphiques, calendrier, formules mathématiques… Le hub ne passe jamais par ces chemins : ces modules sont remplacés par des
 // modules vides au lieu d'être embarqués.
 import { build } from "esbuild";
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -55,3 +56,12 @@ await build({
   logLevel: "info",
 });
 console.log(`Chargés à la demande par Grist, non embarqués (${emptied.size}) : ${[...emptied].sort().join(", ")}`);
+
+// Empreinte de dist/hub.js dans index.html (dist/hub.js?v=…) : une nouvelle version est chargée tout
+// de suite, au lieu de la précédente gardée en cache par le navigateur ou le service qui publie la page.
+const bundle = readFileSync(join(ROOT, "dist/hub.js"));
+const version = createHash("sha256").update(bundle).digest("hex").slice(0, 10);
+const indexFile = join(ROOT, "index.html");
+const index = readFileSync(indexFile, "utf8").replace(/dist\/hub\.js(\?v=[0-9a-f]*)?"/, `dist/hub.js?v=${version}"`);
+writeFileSync(indexFile, index);
+console.log(`index.html charge dist/hub.js?v=${version}`);

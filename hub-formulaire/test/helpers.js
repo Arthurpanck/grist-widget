@@ -52,10 +52,10 @@ async function stopBrowser() {
 
 /**
  * Ouvre le widget. Options : layout (mise en page enregistrée), readonly, access, tables,
- * width (largeur du cadre). Renvoie la page, le cadre du widget et les erreurs de la console.
+ * width (largeur du cadre), scale (densité de pixels, pour des captures). Renvoie la page, le cadre du widget et les erreurs de la console.
  */
-async function openHub({ layout = null, readonly = false, access = "full", tables = DOC, width = 1280 } = {}) {
-  const page = await browser.newPage({ viewport: { width, height: 800 } });
+async function openHub({ layout = null, readonly = false, access = "full", tables = DOC, width = 1280, scale = 1 } = {}) {
+  const page = await browser.newPage({ viewport: { width, height: 800 }, deviceScaleFactor: scale });
   const errors = [];
   page.on("pageerror", e => errors.push(e.message));
   page.on("console", (m) => {
