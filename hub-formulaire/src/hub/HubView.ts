@@ -15,6 +15,7 @@ import { HubContext } from "app/client/hub/HubContext";
 import { reportError } from "app/client/models/errors";
 import { primaryButton } from "app/client/ui2018/buttons";
 import { theme } from "app/client/ui2018/cssVars";
+import * as menus from "app/client/ui2018/menus";
 
 import { Computed, Disposable, dom, Holder, makeTestId, MultiHolder, Observable, styled } from "grainjs";
 
@@ -126,12 +127,25 @@ export class HubView extends Disposable {
                     }
                     return child.render();
                   })),
-                  // Le « + » en bas de page, qui ajoute un bloc à la fin.
+                  // Le « + » en bas de page, qui ajoute un bloc à la fin. Comme le « + » d'une rubrique
+                  // (Forms/Section.ts), il propose aussi d'ajouter une rubrique.
                   cssAddBlock(
+                    testId("add-block"),
                     style.cssPlusButton(
                       style.cssCircle(
                         style.cssPlusIcon("Plus"),
-                        buildMenu({ view: this, insertBox: box => this._root.append(box) }),
+                        buildMenu({
+                          view: this,
+                          insertBox: box => this._root.append(box),
+                          customItems: [
+                            menus.menuItem(
+                              () => this._appendSection(),
+                              menus.menuIcon("Section"),
+                              "Ajouter une section",
+                              testId("add-section"),
+                            ),
+                          ],
+                        }),
                       ),
                     ),
                   ),
@@ -143,6 +157,11 @@ export class HubView extends Disposable {
         ),
       ),
     );
+  }
+
+  private _appendSection() {
+    this.selectedBox.set(this._root.append(components.defaultElement("Section")));
+    this.save().catch(reportError);
   }
 
   private _insert(what: NewBox, placeFor: (selected: BoxModel) => Place) {

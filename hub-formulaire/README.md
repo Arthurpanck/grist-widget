@@ -22,6 +22,8 @@ affichés ; « Vers un site web » ajoute un lien externe.
 3. Pour composer la page :
    - le **+** vert, ou une case « Colonne » vide, ajoute un bouton (choisissez la page ou le
      formulaire dans le sous-menu) ou un bloc ;
+   - le **+** d'une section (au survol) ajoute une section ci-dessus ou ci-dessous, comme dans le
+     Formulaire ; celui du bas de page ajoute une section à la fin ;
    - un clic sélectionne un bloc ; sur un bloc sélectionné, un clic sur un texte le modifie, comme
      le libellé d'une question (Entrée enregistre, Échap annule) ;
    - le clic droit ouvre le menu : insérer au-dessus ou en dessous, supprimer ;
@@ -77,10 +79,10 @@ Le code du hub s'écrit comme celui des formulaires de Grist : imports `app/clie
 - `npm run lint` applique ses règles de style (sa configuration ESLint, copiée dans `src/grist/`),
   sans aucun avertissement toléré ;
 - `npm test` lance les tests (`test/hub.test.js`), écrits sur le modèle de ceux du Formulaire
-  (`test/nbrowser/FormView1.ts` dans grist-core) : 16 scénarios qui ouvrent le widget dans Chromium,
+  (`test/nbrowser/FormView1.ts` dans grist-core) : 17 scénarios qui ouvrent le widget dans Chromium,
   dans une page qui imite Grist avec un document fictif, et l'utilisent comme un utilisateur
-  (édition, lecture, destinations supprimées, lecteur, accès limité, cadre étroit). Playwright doit
-  disposer de Chromium (`npx playwright install chromium`).
+  (édition, sections, lecture, destinations supprimées, lecteur, accès limité, cadre étroit).
+  Playwright doit disposer de Chromium (`npx playwright install chromium`).
 
 Pour reprendre une version plus récente de Grist, changez `GRIST_CORE_COMMIT`
 dans `tools/sync-grist.sh`, puis lancez :

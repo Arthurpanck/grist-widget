@@ -134,6 +134,25 @@ describe("Éditeur", () => {
     await page.close();
   });
 
+  it("ajoute une section ci-dessus ou ci-dessous, comme le Formulaire, et en bas de page", async () => {
+    const { page, frame } = await openHub();
+    const sections = async () => (await savedLayout(page)).children.map(c => c.type).filter(t => t === "Section");
+    // « + » d'une section (Forms/Section.ts), visible au survol.
+    for (const where of ["ci-dessous", "ci-dessus"]) {
+      await frame.locator(".test-forms-Section").first().hover();
+      await frame.locator(".test-forms-plus").first().click();
+      await frame.locator(".grist-floating-menu li", { hasText: `Ajouter une section ${where}` }).click();
+    }
+    assert.equal((await sections()).length, 3);
+    // « + » en bas de page : une section à la fin.
+    await frame.locator(".test-hub-add-block .test-forms-plus, .test-hub-add-block div").last().click();
+    await frame.locator(".test-hub-add-section").click();
+    const layout = await savedLayout(page);
+    assert.equal((await sections()).length, 4);
+    assert.equal(layout.children.at(-1).type, "Section");
+    await page.close();
+  });
+
   it("modifie un paragraphe sur place (bloc de Grist)", async () => {
     const { page, frame } = await openHub();
     const paragraph = frame.locator(".test-forms-Paragraph").first();
