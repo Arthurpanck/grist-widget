@@ -13,8 +13,7 @@ import * as style from "app/client/components/Forms/styles";
 import { Button } from "app/client/hub/Button";
 import { HubContext } from "app/client/hub/HubContext";
 import { reportError } from "app/client/models/errors";
-import { primaryButton } from "app/client/ui2018/buttons";
-import { theme } from "app/client/ui2018/cssVars";
+import { cssButton } from "app/client/ui2018/buttons";
 
 import { Computed, Disposable, dom, Holder, makeTestId, MultiHolder, Observable, styled } from "grainjs";
 
@@ -109,28 +108,46 @@ export class HubView extends Disposable {
     this._onSave(this._root.toJSON());
   }
 
+  /**
+   * Même construction que FormView.buildDom : la page à modifier, puis la barre du bas.
+   */
   public buildDom() {
     return cssHubEditor(
-      cssToolbar(
-        primaryButton("Terminé", dom.on("click", () => this._onDone()), testId("done")),
-      ),
-      cssEditorBody(
-        style.cssFormView(
-          style.cssFormEditBodyWrapper(
-            style.cssFormEditBody(
-              cssWideForm(
-                style.cssFormContainer(
-                  dom("div", dom.forEach(this._root.children, (child) => {
-                    if (!child) {
-                      return dom("div", "Empty node");
-                    }
-                    return child.render();
-                  })),
-                ),
+      style.cssFormView(
+        testId("editor"),
+        style.cssFormEditBodyWrapper(
+          style.cssFormEditBody(
+            cssWideForm(
+              style.cssFormContainer(
+                dom("div", dom.forEach(this._root.children, (child) => {
+                  if (!child) {
+                    return dom("div", "Empty node");
+                  }
+                  return child.render();
+                })),
               ),
             ),
           ),
-          dom.on("click", () => this.selectedBox.set(null)),
+        ),
+        this._buildDoneBar(),
+        dom.on("click", () => this.selectedBox.set(null)),
+      ),
+    );
+  }
+
+  /**
+   * Barre du bas, comme celle du Formulaire (FormView._buildPublisher), avec « Terminé » à la place
+   * d'« Aperçu » et « Publier ».
+   */
+  private _buildDoneBar() {
+    return style.cssSwitcher(
+      style.cssButtonGroup(
+        style.cssSmallButton(
+          dom("div", "Terminé"),
+          cssButton.cls("-primary"),
+          dom.style("margin-left", "auto"), // à droite, comme « Publier »
+          dom.on("click", () => this._onDone()),
+          testId("done"),
         ),
       ),
     );
@@ -150,26 +167,7 @@ const cssHubEditor = styled("div", `
   display: flex;
   flex-direction: column;
   height: 100%;
-  color: ${theme.text};
-`);
-
-const cssToolbar = styled("div", `
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 16px;
-  border-bottom: 1px solid ${theme.menuBorder};
-  background: ${theme.mainPanelBg};
-`);
-
-const cssEditorBody = styled("div", `
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  & > :first-child {
-    flex: 1;
-    min-width: 0;
-    overflow: auto;
-  }
+  overflow: auto;
 `);
 
 // Le formulaire de Grist fait 600 px de large ; un hub a besoin de plus de place pour ses tuiles.
