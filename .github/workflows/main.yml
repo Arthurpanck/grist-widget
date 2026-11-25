@@ -11,6 +11,8 @@ on:
 
 jobs:
   build_and_test:
+    # Hérité du dépôt de Grist Labs : ne tourne que là-bas, pas dans ce dépôt dérivé.
+    if: github.repository == 'gristlabs/grist-widget'
     runs-on: ubuntu-latest
     strategy:
       matrix:
