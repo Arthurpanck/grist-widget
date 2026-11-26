@@ -225,3 +225,11 @@ test('repérer un widget relié par une colonne de référence', () => {
   assert.equal(refLinked(sections, 1, { url, configId: null, optionKey: 'filtres' }), true);
   assert.equal(refLinked(sections, 2, { url, configId: null, optionKey: 'filtres' }), false);
 });
+
+test('ordre « les plus fréquentes d’abord », stable pendant le filtrage', () => {
+  const f = buildFacet({ colId: 'Ville', mode: 'list', sort: 'count' }, col('Ville'), DATA);
+  assert.deepEqual(f.order, ['Lyon', 'Bron', 'Écully', BLANK]);
+  // L'ordre dépend des données, pas des filtres : les valeurs ne bougent pas sous le curseur.
+  const r = run([f, facet('Statut')], { Statut: { in: ['À faire'] } });
+  assert.deepEqual(counts(r, 0), { 'Écully': 1 });
+});

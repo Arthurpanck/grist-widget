@@ -396,6 +396,7 @@ class ListBody {
       item.li.classList.toggle('is-zero', n === 0 && !checked);
       item.count.textContent = fmtInt(n);
       item.label.title = info(k).label;
+      item.input.setAttribute('aria-label', `${info(k).label}, ${plural(n, 'ligne', 'lignes')}`);
       return item.li;
     });
     this.items = items;
