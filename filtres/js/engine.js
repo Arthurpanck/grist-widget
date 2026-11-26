@@ -9,7 +9,7 @@
  *   celui du champ lui-même : il dit ce que l'on obtiendrait en ajoutant cette valeur.
  */
 
-import { BLANK, ERROR, cellItems, cellScalar, cellText, choiceStyle, displayColumn, fold, formatMonth, formatValue, toDay } from './model.js';
+import { BLANK, ERROR, cellItems, cellScalar, cellText, choiceStyle, displayColumn, fold, formatDay, formatMonth, formatValue, toDay } from './model.js';
 
 /** Façons de filtrer un champ. */
 export const MODES = {
@@ -93,10 +93,18 @@ export function isActive(facet, f) {
   return false;
 }
 
+const collator = new Intl.Collator('fr', { numeric: true, sensitivity: 'base' });
+
 function compareNatural(a, b) {
   if (typeof a === 'number' && typeof b === 'number') { return a - b; }
   if (typeof a === 'boolean' && typeof b === 'boolean') { return (b ? 1 : 0) - (a ? 1 : 0); }
-  return String(a).localeCompare(String(b), 'fr', { numeric: true, sensitivity: 'base' });
+  return collator.compare(String(a), String(b));
+}
+
+/** Vrai pour les cases à cocher par jour (colonne de dates en mode « Cases à cocher »). */
+function isDayList(facet) {
+  const b = displayColumn(facet.col).base;
+  return facet.mode === 'list' && (b === 'Date' || b === 'DateTime');
 }
 
 /**
@@ -109,8 +117,11 @@ export function buildFacet(field, col, data) {
   const n = data.id.length;
   const disp = displayColumn(col);
   if (LIST_MODES.has(facet.mode)) {
-    const keysOf = facet.mode === 'year' ? (v => { const d = toDay(cellScalar(v), disp); return [d ? d.slice(0, 4) : BLANK]; })
-      : facet.mode === 'month' ? (v => { const d = toDay(cellScalar(v), disp); return [d ? d.slice(0, 7) : BLANK]; })
+    const day = v => { const d = toDay(cellScalar(v), disp); return d; };
+    const keysOf = facet.mode === 'year' ? (v => { const d = day(v); return [d ? d.slice(0, 4) : BLANK]; })
+      : facet.mode === 'month' ? (v => { const d = day(v); return [d ? d.slice(0, 7) : BLANK]; })
+      // Une date-heure compte pour son jour, pas pour son heure.
+      : isDayList(facet) ? (v => [day(v) || BLANK])
       : disp.base === 'Bool' ? (v => cellItems(v).map(k => (k === BLANK ? false : k)))
       : (v => { const items = cellItems(v); return items.length > 1 ? [...new Set(items)] : items; });
     const rowKeys = new Array(n);
@@ -153,9 +164,14 @@ export function describeValue(facet, key) {
   else if (key === ERROR) { label = 'Erreur'; }
   else if (facet.mode === 'year') { label = String(key); }
   else if (facet.mode === 'month') { label = formatMonth(String(key)); }
+  else if (isDayList(facet)) { label = formatDay(String(key)); }
   else { label = formatValue(key, col); }
   const style = facet.mode === 'list' ? choiceStyle(key, col) : null;
-  return { key, label, style, special: key === BLANK || key === ERROR, bool: disp.base === 'Bool' };
+  return {
+    key, label, style, special: key === BLANK || key === ERROR, bool: disp.base === 'Bool',
+    folded: fold(label),                          // pour la recherche dans les valeurs
+    sig: label + '|' + JSON.stringify(style),     // l'affichage change si l'un ou l'autre change
+  };
 }
 
 /** Ordre d'affichage des valeurs : ordre des choix, puis ordre naturel ; « Vide » à la fin. */
@@ -163,7 +179,7 @@ export function orderValues(facet, keys) {
   const col = facet.col;
   const choiceRank = new Map((col.choices || []).map((c, i) => [c, i]));
   const special = k => (k === BLANK ? 2 : k === ERROR ? 3 : 0);
-  const dir = (facet.mode === 'year' || facet.mode === 'month') ? -1 : 1;
+  const dir = (facet.mode === 'year' || facet.mode === 'month' || isDayList(facet)) ? -1 : 1;
   return keys.slice().sort((a, b) => {
     const sa = special(a), sb = special(b);
     if (sa || sb) { return sa - sb; }
@@ -209,7 +225,7 @@ function makeTest(facet, f, now) {
 /** Texte de chaque ligne (toutes colonnes confondues) pour la recherche globale. */
 export function buildSearchIndex(columns, data) {
   const n = data.id.length;
-  const cols = columns.filter(c => data[c.colId]);
+  const cols = columns.filter(c => data[c.colId] && c.base !== 'Attachments');
   const out = new Array(n);
   for (let i = 0; i < n; i++) {
     let s = '';

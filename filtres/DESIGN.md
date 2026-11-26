@@ -90,6 +90,16 @@ seulement (c'est ce que l'on obtiendrait en cochant ces valeurs). Deux ou plus :
 part. Un seul passage sur les lignes suffit : 30 000 lignes et 9 champs se filtrent en quelques
 dizaines de millisecondes.
 
+## Relecture
+
+Une relecture indépendante du code, avec reproduction de chaque problème, a conduit à corriger : des
+filtres mémorisés effacés quand l'identifiant du document arrivait avant les colonnes ; une date
+« Au » en cours de saisie qui écrasait la date « Du » (Chrome signale chaque chiffre tapé) ; des
+lenteurs sur 50 000 lignes (formats numériques recréés, tri, listes de dizaines de milliers de
+valeurs, désormais limitées à 300 affichées) ; les colonnes en pourcentage ; les dates-heures en cases
+à cocher (une case par jour) ; une recherche en attente qui revenait après « Tout effacer » ; le focus
+clavier perdu dans les listes et dans l'écran de configuration. Chaque cas a désormais son test.
+
 ## Essais réalisés dans Grist
 
 Grist local (grist-core 1.7.22, Docker), widget servi en local, scripts Playwright :

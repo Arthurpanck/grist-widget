@@ -13,6 +13,8 @@ import { displayColumn, fold, formatCompact, formatDay, formatNumberInput, parse
 
 /** Valeurs visibles d'un bloc avant « Afficher plus ». */
 export const VISIBLE = 8;
+/** Au plus, valeurs affichées d'un bloc (au-delà, il faut préciser la recherche). */
+const MAX_RENDERED = 300;
 /** Largeur à partir de laquelle les blocs se placent côte à côte. */
 const GRID_WIDTH = 620;
 /** Hauteur en dessous de laquelle un widget large devient un bandeau (une seule rangée de blocs). */
@@ -61,7 +63,7 @@ export class Panel {
     this._search = debounce(q => actions.setSearch(q), 200);
     this.searchBox = h('div', { class: 'fl-search' }, icon('search', 15), this.searchInput);
     this.count = h('div', { class: 'fl-count', role: 'status', 'aria-live': 'polite' });
-    this.resetBtn = h('button', { type: 'button', class: 'fl-link fl-reset', onclick: () => actions.clearAll() }, 'Tout effacer');
+    this.resetBtn = h('button', { type: 'button', class: 'fl-link fl-reset', onclick: () => { this._search.cancel(); actions.clearAll(); } }, 'Tout effacer');
     this.settingsBtn = h('button', { type: 'button', class: 'fl-icon-btn fl-settings-btn', title: 'Configurer les filtres', 'aria-label': 'Configurer les filtres', onclick: () => actions.openSettings() }, icon('settings', 16));
     this.chips = h('div', { class: 'fl-chips' });
     this.notice = h('div', { class: 'fl-notice', hidden: true });
@@ -131,7 +133,7 @@ export class Panel {
     // Puces des filtres actifs.
     this.chips.replaceChildren(...facets.filter(f => isActive(f, filters[f.colId])).map(f => this._chip(f, filters[f.colId])));
     if (v.search && v.search.trim()) {
-      this.chips.appendChild(this._chipEl('Recherche', `« ${v.search.trim()} »`, () => { this.searchInput.value = ''; this.actions.setSearch(''); }, () => this.searchInput.focus()));
+      this.chips.appendChild(this._chipEl('Recherche', `« ${v.search.trim()} »`, () => { this._search.cancel(); this.searchInput.value = ''; this.actions.setSearch(''); }, () => this.searchInput.focus()));
     }
     this.chipsRow.hidden = !this.chips.childElementCount;
 
@@ -368,17 +370,22 @@ class ListBody {
     const keys = facet.order.slice();
     for (const k of selected) { if (!facet.values.has(k)) { keys.push(k); } }
     const info = k => facet.values.get(k) || describeValue(facet, k);
+    // La recherche n'est proposée qu'au-delà de dix valeurs ; sans elle, aucune recherche ne s'applique.
+    this.searchBox.hidden = keys.length <= VISIBLE + 2;
+    if (this.searchBox.hidden && this.query) { this.query = this.searchInput.value = ''; }
     const q = fold(this.query.trim());
     let candidates = keys;
     if (this.hideEmpty) { candidates = candidates.filter(k => selSet.has(k) || (counts.get(k) || 0) > 0); }
-    if (q) { candidates = candidates.filter(k => fold(info(k).label).includes(q)); }
+    if (q) { candidates = candidates.filter(k => info(k).folded.includes(q)); }
     let visible = candidates;
     const band = this.view.panel.band;
     const collapsedList = !band && !q && !this.expanded && candidates.length > VISIBLE + 2;
     if (collapsedList) {
       visible = candidates.filter((k, i) => i < VISIBLE || selSet.has(k));
+    } else if (candidates.length > MAX_RENDERED) {
+      // Des dizaines de milliers de valeurs (texte libre) : on n'en affiche qu'une partie.
+      visible = candidates.filter((k, i) => i < MAX_RENDERED || selSet.has(k));
     }
-    this.searchBox.hidden = keys.length <= VISIBLE + 2;
     this.notSelect.hidden = !selected.length;
     this.notSelect.value = this.f && this.f.not ? 'not' : 'in';
     this.view.el.classList.toggle('is-excluding', Boolean(selected.length && this.f && this.f.not));
@@ -386,8 +393,10 @@ class ListBody {
     const items = new Map();
     const els = visible.map(k => {
       const id = typeof k + ':' + String(k);
+      const d = info(k);
       let item = this.items.get(id);
-      if (!item) { item = this._item(k); }
+      // Libellé ou couleur changés (choix modifiés dans Grist) : l'élément est refait.
+      if (!item || item.sig !== d.sig) { item = this._item(k, d); }
       items.set(id, item);
       const n = counts.get(k) || 0;
       const checked = selSet.has(k);
@@ -400,19 +409,22 @@ class ListBody {
       return item.li;
     });
     this.items = items;
-    // Remplace le contenu sans recréer les éléments conservés (le focus reste en place).
+    // Remplace le contenu sans recréer les éléments conservés : d'abord retirer ceux qui disparaissent,
+    // puis ranger les autres, pour ne jamais déplacer l'élément qui a le focus.
+    const keep = new Set(els);
+    for (const li of [...this.list.children]) { if (!keep.has(li)) { li.remove(); } }
     els.forEach((li, i) => { if (this.list.children[i] !== li) { this.list.insertBefore(li, this.list.children[i] || null); } });
-    while (this.list.children.length > els.length) { this.list.lastChild.remove(); }
 
-    this.empty.hidden = visible.length > 0;
-    this.empty.textContent = q ? 'Aucune valeur ne correspond.' : 'Aucune valeur.';
     const hidden = candidates.length - visible.length;
-    this.more.hidden = band || !(hidden > 0 || (this.expanded && !q && candidates.length > VISIBLE + 2));
+    const capped = !collapsedList && hidden > 0;
+    this.empty.hidden = visible.length > 0 && !capped;
+    this.empty.textContent = capped ? `Et ${fmtInt(hidden)} autres valeurs : précisez la recherche.`
+      : q ? 'Aucune valeur ne correspond.' : 'Aucune valeur.';
+    this.more.hidden = capped || band || !(hidden > 0 || (this.expanded && !q && candidates.length > VISIBLE + 2));
     this.more.textContent = hidden > 0 ? `Afficher ${hidden > 1 ? `les ${fmtInt(hidden)} autres valeurs` : 'l’autre valeur'}` : 'Afficher moins';
   }
 
-  _item(key) {
-    const v = this.facet.values.get(key) || describeValue(this.facet, key);
+  _item(key, v) {
     const input = h('input', { type: 'checkbox', class: 'fl-checkbox', onchange: () => this._toggle(key, input.checked) });
     let text;
     if (v.style) {
@@ -435,7 +447,7 @@ class ListBody {
     }, 'Seulement');
     // Le bouton « Seulement » est dans l'étiquette : un clic dessus ne coche pas la case (contenu interactif).
     const li = h('li', { class: 'fl-value' }, h('label', { class: 'fl-value-row' }, input, label, only, count));
-    return { li, input, count, label };
+    return { li, input, count, label, sig: v.sig };
   }
 }
 
@@ -463,20 +475,25 @@ class RangeBody {
   focus() { this.min.focus({ preventScroll: true }); }
 
   _commit() {
-    const a = parseNumberInput(this.min.value), b = parseNumberInput(this.max.value);
-    this.min.classList.toggle('is-invalid', Boolean(this.min.value.trim()) && a === null);
-    this.max.classList.toggle('is-invalid', Boolean(this.max.value.trim()) && b === null);
-    let min = a, max = b;
-    if (min !== null && max !== null && min > max) { [min, max] = [max, min]; }
+    const col = displayColumn(this.facet.col);
+    const min = parseNumberInput(this.min.value, col), max = parseNumberInput(this.max.value, col);
+    const badMin = Boolean(this.min.value.trim()) && min === null;
+    const badMax = Boolean(this.max.value.trim()) && max === null;
+    // Minimum au-dessus du maximum (souvent en cours de saisie) : signalé, rien n'est appliqué.
+    const crossed = min !== null && max !== null && min > max;
+    this.min.classList.toggle('is-invalid', badMin || crossed);
+    this.max.classList.toggle('is-invalid', badMax || crossed);
+    if (badMin || badMax || crossed) { return; }
     this.view.set(min === null && max === null ? null : { min, max });
   }
 
   _sync(force) {
     const f = this.f || {};
+    const col = displayColumn(this.facet.col);
     for (const [input, val] of [[this.min, f.min], [this.max, f.max]]) {
       if (force || document.activeElement !== input) {
-        const text = val === null || val === undefined ? '' : formatNumberInput(val);
-        if (parseNumberInput(input.value) !== (val ?? null)) { input.value = text; }
+        const text = val === null || val === undefined ? '' : formatNumberInput(val, col);
+        if (parseNumberInput(input.value, col) !== (val ?? null)) { input.value = text; }
         input.classList.remove('is-invalid');
       }
     }
@@ -505,7 +522,13 @@ class PeriodBody {
       h('optgroup', { label: 'Période' }, PRESETS.map(([id, label]) => h('option', { value: id }, label)),
         h('option', { value: 'custom' }, 'Dates personnalisées…')),
       h('optgroup', { label: 'Date renseignée ou non' }, PRESENCE.map(([id, label]) => h('option', { value: id }, label))));
-    const make = (name) => h('input', { type: 'date', class: 'fl-input fl-date', 'aria-label': name, onchange: () => this._dates() });
+    // Chrome signale un changement à chaque chiffre tapé dans une date : on attend la fin de la saisie.
+    this._apply = debounce(() => this._dates(), 500);
+    const make = (name) => h('input', {
+      type: 'date', class: 'fl-input fl-date', 'aria-label': name,
+      onchange: () => this._apply(), onblur: () => this._apply.flush(),
+      onkeydown: e => { if (e.key === 'Enter') { this._apply.flush(); } },
+    });
     this.from = make('Du');
     this.to = make('Au');
     this.hint = h('div', { class: 'fl-range-hint' });
@@ -524,8 +547,14 @@ class PeriodBody {
   }
 
   _dates() {
-    let from = this.from.value || null, to = this.to.value || null;
-    if (from && to && from > to) { [from, to] = [to, from]; }
+    const from = this.from.value || null, to = this.to.value || null;
+    const f = this.f || {};
+    if (!f.preset && (f.from || null) === from && (f.to || null) === to) { return; }
+    // « Du » après « Au » (souvent en cours de saisie) : signalé, rien n'est appliqué.
+    const crossed = Boolean(from && to && from > to);
+    this.from.classList.toggle('is-invalid', crossed);
+    this.to.classList.toggle('is-invalid', crossed);
+    if (crossed) { return; }
     this.custom = true;
     this.view.set(from || to ? { from, to } : null);
   }
@@ -541,8 +570,14 @@ class PeriodBody {
     this._syncSelect();
     const presence = Boolean(f && (f.preset === 'blank' || f.preset === 'notBlank'));
     const { from, to } = f && f.preset && !presence ? resolvePreset(f.preset) : { from: f ? f.from : null, to: f ? f.to : null };
-    if (document.activeElement !== this.from) { this.from.value = from || ''; }
-    if (document.activeElement !== this.to) { this.to.value = to || ''; }
+    // Les dates saisies, même pas encore appliquées, ne sont jamais remplacées pendant la saisie.
+    const editing = this.el.contains(document.activeElement) && document.activeElement !== this.preset;
+    if (!editing) {
+      this.from.value = from || '';
+      this.to.value = to || '';
+      this.from.classList.remove('is-invalid');
+      this.to.classList.remove('is-invalid');
+    }
     this.dates.hidden = presence;
     this.hint.textContent = bounds && bounds.min
       ? (bounds.min === bounds.max ? `Une seule date : ${formatDay(bounds.min)}` : `Du ${formatDay(bounds.min)} au ${formatDay(bounds.max)}`)

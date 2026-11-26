@@ -13,6 +13,7 @@ export const BLANK = '\u0000vide';
 export const ERROR = '\u0000erreur';
 
 const LOCALE = 'fr-FR';
+const plainNumber = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 10 });
 
 /** Types de colonnes Grist reconnus, ramenés à leur base ('Ref:Projets' → 'Ref'). */
 export function baseType(type) {
@@ -183,7 +184,7 @@ export function formatValue(value, col) {
     if (c.base === 'Date' || c.base === 'DateTime') { return formatDay(toDay(value, c)); }
     if (c.base === 'Numeric' || c.base === 'Int') { return c.numberFormat.format(value); }
     if (c.base === 'Bool') { return value ? 'Oui' : 'Non'; }
-    return new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 10 }).format(value);
+    return plainNumber.format(value);
   }
   return String(value);
 }
@@ -195,7 +196,7 @@ export function cellText(raw, col) {
 
 /** Texte comparable : minuscules, sans accents. */
 export function fold(text) {
-  return String(text).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  return String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 /** Style d'un choix Grist (couleurs, gras…), ou null pour une valeur sans style. */
@@ -214,18 +215,28 @@ export function choiceStyle(value, col) {
   };
 }
 
-/** Formats numériques sans décimales superflues pour les bornes saisies (10 000, 12,5). */
-export function formatNumberInput(n) {
+const isPercent = col => Boolean(col && col.options && col.options.numMode === 'percent');
+
+/**
+ * Borne saisie, telle qu'affichée dans Grist : « 12,5 » ; pour une colonne en pourcentage, la valeur
+ * 0,2 s'écrit « 20 ».
+ */
+export function formatNumberInput(n, col) {
   if (n === null || n === undefined || !isFinite(n)) { return ''; }
-  return String(n).replace('.', ',');
+  const v = isPercent(col) ? Math.round(n * 100 * 1e9) / 1e9 : n;
+  return String(v).replace('.', ',');
 }
 
-/** Lit un nombre saisi à la française : « 10 000 », « 12,5 », « 1.5k » n'est pas accepté. */
-export function parseNumberInput(text) {
-  const t = String(text || '').replace(/[\s  €$%]/g, '').replace(',', '.');
+/**
+ * Lit un nombre saisi à la française : « 10 000 », « 12,5 » ; « 20 » ou « 20 % » vaut 0,2 pour une
+ * colonne en pourcentage, comme dans Grist.
+ */
+export function parseNumberInput(text, col) {
+  const t = String(text || '').replace(/[\s\u00a0\u202f€$%]/g, '').replace(',', '.');
   if (!t) { return null; }
   const n = Number(t);
-  return isFinite(n) ? n : null;
+  if (!isFinite(n)) { return null; }
+  return isPercent(col) ? n / 100 : n;
 }
 
 /** Montant ou nombre abrégé pour les puces (12 k€, 1,2 M€). */

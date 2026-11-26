@@ -5,7 +5,7 @@ import { test } from 'node:test';
 
 import { autoFields, effectiveFields, normalize } from '../js/config.js';
 import { buildFacet, buildSearchIndex, evaluate, isActive, modesFor, resolvePreset } from '../js/engine.js';
-import { BLANK, ERROR, cellItems, describeColumns, formatValue, guessColumns, parseNumberInput, toDay } from '../js/model.js';
+import { BLANK, ERROR, cellItems, describeColumns, formatNumberInput, formatValue, guessColumns, parseNumberInput, toDay } from '../js/model.js';
 import { RESERVE, Selection, refLinked } from '../js/selection.js';
 
 const day = (y, m, d) => Date.UTC(y, m - 1, d) / 1000;
@@ -232,4 +232,22 @@ test('ordre « les plus fréquentes d’abord », stable pendant le filtrage', (
   // L'ordre dépend des données, pas des filtres : les valeurs ne bougent pas sous le curseur.
   const r = run([f, facet('Statut')], { Statut: { in: ['À faire'] } });
   assert.deepEqual(counts(r, 0), { 'Écully': 1 });
+});
+
+test('colonnes en pourcentage : « 20 » vaut 0,2, comme dans Grist', () => {
+  const pct = { options: { numMode: 'percent' } };
+  assert.equal(parseNumberInput('20 %', pct), 0.2);
+  assert.equal(formatNumberInput(0.125, pct), '12,5');
+  assert.equal(parseNumberInput('1 500,5'), 1500.5);
+});
+
+test('dates-heures en cases à cocher : une case par jour', () => {
+  const c = { colId: 'Maj', label: 'Mise à jour', type: 'DateTime:Europe/Paris', base: 'DateTime', tz: 'Europe/Paris', options: {}, choices: [], choiceOptions: {} };
+  const t = h => ['D', Date.UTC(2024, 2, 15, h) / 1000, 'Europe/Paris'];
+  const data = { id: [1, 2, 3, 4], Maj: [t(8), t(12), t(16), ['D', Date.UTC(2024, 2, 16, 9) / 1000, 'Europe/Paris']] };
+  const f = buildFacet({ colId: 'Maj', mode: 'list' }, c, data);
+  assert.deepEqual(f.order, ['2024-03-16', '2024-03-15']);
+  assert.equal(f.values.get('2024-03-15').label, '15/03/2024');
+  const r = evaluate({ facets: [f], filters: { Maj: { in: ['2024-03-15'] } }, ids: data.id });
+  assert.deepEqual(r.rowIds, [1, 2, 3]);
 });

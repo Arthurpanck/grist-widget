@@ -68,13 +68,13 @@ after(async () => { await browser?.close(); });
  * Ouvre le widget. Options : options (réglages enregistrés), readonly, linked, width, height,
  * context (pour garder le stockage du navigateur d'une ouverture à l'autre).
  */
-async function openWidget({ options = null, readonly = false, linked = true, access = 'full', width = 320, height = 800, context = null, waitFor = '.fl-facet' } = {}) {
+async function openWidget({ options = null, readonly = false, linked = true, access = 'full', width = 320, height = 800, context = null, waitFor = '.fl-facet', delays = null } = {}) {
   const ctx = context || await browser.newContext({ viewport: { width: Math.max(width + 40, 800), height: height + 40 } });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') { errors.push(m.text()); } });
-  await page.addInitScript((mock) => { if (window === window.top) { window.__mock = mock; } }, { ...makeDoc(), options, linked, access });
+  await page.addInitScript((mock) => { if (window === window.top) { window.__mock = mock; } }, { ...makeDoc(), options, linked, access, delays });
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.href.startsWith('https://docs.getgrist.com/grist-plugin-api.js')) {
@@ -255,4 +255,65 @@ test('dispositions : colonne, grille, bandeau', async () => {
     assert.equal(await frame.evaluate(() => document.scrollingElement.scrollTop), 0);
     await page.close();
   }
+});
+
+test('filtres retrouvés même si l’identifiant du document arrive avant les colonnes', async () => {
+  const first = await openWidget();
+  await value(first.frame, 'Statut', 'Terminé').click();
+  await first.page.waitForTimeout(400);
+  await first.page.close();
+  const second = await openWidget({ context: first.context, delays: { docName: 5, meta: 200 } });
+  await waitSelected(second.page, expectIds(i => i % 3 === 2));
+  await second.page.waitForTimeout(400);
+  const stored = await second.frame.evaluate(() => JSON.parse(localStorage.getItem('grist-filtres:DOC123:Projets:auto')));
+  assert.deepEqual(stored.filters.Statut.in, ['Terminé']);
+  await second.page.close();
+  await first.context.close();
+});
+
+test('saisie d’une date : l’autre date n’est jamais modifiée', async () => {
+  const { page, frame } = await openWidget();
+  const dates = facet(frame, 'Debut').locator('input[type=date]');
+  await dates.first().fill('2022-01-01');
+  await dates.nth(1).fill('2022-12-31');
+  await waitSelected(page, expectIds(i => i % 5 === 2));
+  // Chrome signale chaque chiffre tapé : « 0002-12-31 », puis « 0020-12-31 »… jusqu'à « 2023-12-31 ».
+  await dates.nth(1).evaluate(async (input) => {
+    for (const v of ['0002-12-31', '0020-12-31', '0202-12-31', '2023-12-31']) {
+      input.value = v;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 30));
+    }
+  });
+  await page.waitForTimeout(700);
+  assert.equal(await dates.first().inputValue(), '2022-01-01');
+  await waitSelected(page, expectIds(i => i % 5 === 2 || i % 5 === 3));
+  await page.close();
+});
+
+test('« Tout effacer » juste après une recherche : la recherche ne revient pas', async () => {
+  const { page, frame } = await openWidget();
+  await value(frame, 'Statut', 'En cours').click();
+  await frame.locator('.fl-search-input').type('bron');
+  await frame.locator('.fl-reset').click();
+  await page.waitForTimeout(400);
+  assert.equal(await frame.locator('.fl-search-input').inputValue(), '');
+  await waitSelected(page, null);
+  assert.equal(await frame.locator('.fl-toast').isHidden(), false);
+  await page.close();
+});
+
+test('le focus clavier reste sur la case quand une autre valeur disparaît', async () => {
+  const { page, frame } = await openWidget();
+  const lyon = value(frame, 'Ville', 'Lyon').locator('input');
+  await lyon.focus();
+  // Toutes les lignes de Bron passent à Lyon (modification faite ailleurs) : « Bron » disparaît.
+  await page.evaluate(() => {
+    const d = window.__mock.data;
+    d.Ville = d.Ville.map(v => (v === 'Bron' ? 'Lyon' : v));
+    window.__dataChanged();
+  });
+  await frame.waitForFunction(() => !document.querySelector('.fl-facet[data-col="Ville"]').textContent.includes('Bron'));
+  assert.equal(await frame.evaluate(() => document.activeElement.closest('.fl-value')?.textContent.includes('Lyon')), true);
+  await page.close();
 });

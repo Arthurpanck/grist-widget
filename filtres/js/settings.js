@@ -6,6 +6,7 @@
 
 import { h, icon } from './dom.js';
 import { MODES, modesFor } from './engine.js';
+import { displayColumn } from './model.js';
 
 const TYPE_LABELS = {
   Text: 'Texte', Numeric: 'Numérique', Int: 'Entier', Bool: 'Case à cocher', Date: 'Date', DateTime: 'Date et heure',
@@ -40,27 +41,46 @@ export function openSettings(root, { columns, fields, config, onSave, onClose })
     const [r] = rows.splice(i, 1);
     rows.splice(j, 0, r);
     render();
-    list.children[j]?.querySelector(j > i ? '.fl-down' : '.fl-up')?.focus();
+    // Garder le focus sur la flèche du champ déplacé, ou sur l'autre si celle-ci est désactivée en bout de liste.
+    const row = list.children[j];
+    const arrow = row && (row.querySelector(`${j > i ? '.fl-down' : '.fl-up'}:not(:disabled)`) || row.querySelector('.fl-up:not(:disabled), .fl-down:not(:disabled)'));
+    arrow?.focus();
   }
 
+  /** Refait les lignes en gardant le focus sur le même contrôle du même champ. */
   function render() {
+    const active = document.activeElement;
+    const focusKey = active && list.contains(active) && active.dataset.role ? [active.dataset.col, active.dataset.role] : null;
+    renderRows();
+    if (focusKey) {
+      const target = [...list.querySelectorAll('[data-role]')].find(el => el.dataset.col === focusKey[0] && el.dataset.role === focusKey[1]);
+      target?.focus();
+    }
+  }
+
+  function renderRows() {
     list.replaceChildren(...rows.map((r, i) => {
       const modes = modesFor(r.col);
       const typeName = TYPE_LABELS[r.col.base] || r.col.base;
       const isChoice = r.col.base === 'Choice' || r.col.base === 'ChoiceList';
-      const check = h('input', { type: 'checkbox', checked: r.on, 'aria-label': `Filtrer sur ${r.col.label}`, onchange: () => { r.on = check.checked; render(); } });
-      const modeSel = modes.length > 1 ? h('select', { class: 'fl-select fl-mode-select', 'aria-label': `Façon de filtrer ${r.col.label}`, title: MODES[r.mode], onchange: () => { r.mode = modeSel.value; render(); } },
+      const tag = role => ({ 'data-col': r.col.colId, 'data-role': role });
+      const check = h('input', { ...tag('check'), type: 'checkbox', checked: r.on, 'aria-label': `Filtrer sur ${r.col.label}`, onchange: () => { r.on = check.checked; render(); } });
+      const modeSel = modes.length > 1 ? h('select', { ...tag('mode'), class: 'fl-select fl-mode-select', 'aria-label': `Façon de filtrer ${r.col.label}`, title: MODES[r.mode], onchange: () => { r.mode = modeSel.value; render(); } },
         modes.map(m => h('option', { value: m, selected: m === r.mode, title: MODES[m] }, MODE_SHORT[m]))) : null;
       const isList = ['list', 'year', 'month'].includes(r.mode);
-      const sortSel = isList && !(r.col.base === 'Bool') ? h('select', { class: 'fl-select fl-sort-select', 'aria-label': `Ordre des valeurs de ${r.col.label}`, onchange: () => { r.sort = sortSel.value; } },
-        h('option', { value: 'natural', selected: r.sort !== 'count' }, isChoice ? 'Ordre des choix' : (r.mode === 'list' ? 'Ordre alphabétique' : 'Plus récentes d’abord')),
+      const base = displayColumn(r.col).base;
+      const naturalLabel = isChoice ? 'Ordre des choix'
+        : (r.mode !== 'list' || base === 'Date' || base === 'DateTime') ? 'Plus récentes d’abord'
+          : (base === 'Numeric' || base === 'Int') ? 'Ordre croissant' : 'Ordre alphabétique';
+      const sortSel = isList && !(r.col.base === 'Bool') ? h('select', { ...tag('sort'), class: 'fl-select fl-sort-select', 'aria-label': `Ordre des valeurs de ${r.col.label}`, onchange: () => { r.sort = sortSel.value; } },
+        h('option', { value: 'natural', selected: r.sort !== 'count' }, naturalLabel),
         h('option', { value: 'count', selected: r.sort === 'count' }, 'Plus fréquentes d’abord')) : null;
       const li = h('li', { class: 'fl-fieldrow' + (r.on ? ' is-on' : ''), draggable: 'true', 'data-index': String(i),
         ondragstart: e => { dragIndex = i; li.classList.add('is-dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); },
         ondragend: () => { dragIndex = null; li.classList.remove('is-dragging'); },
         ondragover: e => { if (dragIndex !== null) { e.preventDefault(); li.classList.add('is-drop'); } },
         ondragleave: () => li.classList.remove('is-drop'),
-        ondrop: e => { e.preventDefault(); li.classList.remove('is-drop'); if (dragIndex !== null) { move(dragIndex, i); } },
+        ondrop: e => { e.preventDefault(); li.classList.remove('is-drop'); const from = dragIndex; dragIndex = null; if (from !== null) { move(from, i); } },
       },
       h('div', { class: 'fl-fieldrow-line' },
         h('span', { class: 'fl-grip', title: 'Glisser pour déplacer' }, icon('grip', 14)),
@@ -68,8 +88,8 @@ export function openSettings(root, { columns, fields, config, onSave, onClose })
           h('span', { class: 'fl-type', 'aria-hidden': 'true' }, icon(TYPE_ICONS[r.col.base] || 'text', 13)),
           h('span', { class: 'fl-fieldrow-label' }, r.col.label)),
         h('div', { class: 'fl-fieldrow-move' },
-          h('button', { type: 'button', class: 'fl-icon-btn fl-up', 'aria-label': `Monter ${r.col.label}`, title: 'Monter', disabled: i === 0, onclick: () => move(i, i - 1) }, icon('up', 14)),
-          h('button', { type: 'button', class: 'fl-icon-btn fl-down', 'aria-label': `Descendre ${r.col.label}`, title: 'Descendre', disabled: i === rows.length - 1, onclick: () => move(i, i + 1) }, icon('down', 14)))),
+          h('button', { ...tag('up'), type: 'button', class: 'fl-icon-btn fl-up', 'aria-label': `Monter ${r.col.label}`, title: 'Monter', disabled: i === 0, onclick: () => move(i, i - 1) }, icon('up', 14)),
+          h('button', { ...tag('down'), type: 'button', class: 'fl-icon-btn fl-down', 'aria-label': `Descendre ${r.col.label}`, title: 'Descendre', disabled: i === rows.length - 1, onclick: () => move(i, i + 1) }, icon('down', 14)))),
       r.on && (modeSel || sortSel) ? h('div', { class: 'fl-fieldrow-opts' }, modeSel, sortSel) : null);
       return li;
     }));

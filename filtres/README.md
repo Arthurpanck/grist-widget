@@ -20,7 +20,8 @@ l'on obtiendrait en la cochant.
 - **Chercher une valeur** dans les longues listes ; **Entrée** coche la première trouvée. Au-delà de
   dix valeurs, seules les huit premières (et les valeurs cochées) sont affichées : « Afficher les 23
   autres valeurs ».
-- **Montants et nombres** : minimum et maximum, saisis à la française (« 10 000 », « 12,5 »).
+- **Montants et nombres** : minimum et maximum, saisis à la française (« 10 000 », « 12,5 » ; « 20 »
+  pour 20 % dans une colonne en pourcentage). Un minimum au-dessus du maximum est signalé en rouge.
 - **Dates** : périodes prêtes à l'emploi (aujourd'hui, cette semaine, ce mois-ci, ce trimestre, cette
   année, 30 derniers ou prochains jours, mois ou année dernière, avant ou à partir d'aujourd'hui), dates
   « du … au … », « sans date » ou « avec une date » ; ou des cases à cocher par année ou par mois.

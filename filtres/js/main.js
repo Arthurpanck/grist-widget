@@ -35,6 +35,7 @@ const S = {
   loading: true,
   error: null,
   restoredKey: null,
+  activeKey: null,
   undo: null,
   result: null,
   selection: new Selection(),
@@ -51,12 +52,22 @@ function storageKey() {
   return S.docId && S.tableId ? `grist-filtres:${S.docId}:${S.tableId}:${S.config.id || 'auto'}` : null;
 }
 
+/**
+ * Reprend les filtres mémorisés pour ce panneau. Les widgets Filtres non configurés d'une même table
+ * partagent la clé « auto » ; un widget dupliqué partage l'identifiant de ses réglages.
+ */
 function restore() {
   const key = storageKey();
   if (!key || key === S.restoredKey) { return; }
   S.restoredKey = key;
+  const previous = S.activeKey;
+  S.activeKey = key;
   const saved = store.load(key);
-  if (!saved) { return; }
+  if (!saved) {
+    // Autre panneau ou autre table, sans filtres mémorisés : on repart de zéro.
+    if (previous && previous !== key) { S.filters = {}; S.search = ''; }
+    return;
+  }
   if (S.config.remember) {
     S.filters = saved.filters && typeof saved.filters === 'object' ? saved.filters : {};
     S.search = typeof saved.search === 'string' ? saved.search : '';
@@ -64,20 +75,19 @@ function restore() {
   S.collapsed = new Set(Array.isArray(saved.collapsed) ? saved.collapsed : []);
 }
 
+function saveNow() {
+  const key = storageKey();
+  if (!key || key !== S.activeKey) { return; }
+  store.save(key, {
+    filters: S.config.remember ? S.filters : {},
+    search: S.config.remember ? S.search : '',
+    collapsed: [...S.collapsed],
+  });
+}
+
 const persist = (() => {
   let t = null;
-  return () => {
-    clearTimeout(t);
-    t = setTimeout(() => {
-      const key = storageKey();
-      if (!key) { return; }
-      store.save(key, {
-        filters: S.config.remember ? S.filters : {},
-        search: S.config.remember ? S.search : '',
-        collapsed: [...S.collapsed],
-      });
-    }, 250);
-  };
+  return () => { clearTimeout(t); t = setTimeout(saveNow, 250); };
 })();
 
 /**
@@ -90,13 +100,17 @@ function rebuild(reason = 'user') {
   const byId = new Map(S.columns.map(c => [c.colId, c]));
   S.facets = S.fields.filter(f => S.data[f.colId]).map(f => buildFacet(f, byId.get(f.colId), S.data));
   S.searchIndex = S.config.search ? buildSearchIndex(S.columns, S.data) : null;
-  // Filtres d'un champ retiré ou passé à un autre mode : oubliés.
+  // Les filtres d'un champ absent ou passé à un autre mode sont ignorés (voir refresh), pas effacés :
+  // les colonnes peuvent n'être pas encore toutes connues. Ils sont oubliés quand les réglages changent.
+  refresh(reason);
+}
+
+/** Oublie les filtres des champs retirés ou passés à un autre mode. */
+function pruneFilters() {
   const modeOf = new Map(S.facets.map(f => [f.colId, f.mode]));
   for (const [colId, f] of Object.entries(S.filters)) {
-    const mode = modeOf.get(colId);
-    if (!mode || (f && f.mode && f.mode !== mode)) { delete S.filters[colId]; }
+    if (!f || modeOf.get(colId) !== f.mode) { delete S.filters[colId]; }
   }
-  refresh(reason);
 }
 
 /**
@@ -109,7 +123,7 @@ function refresh(reason = 'user') {
     const filters = {};
     for (const facet of S.facets) {
       const f = S.filters[facet.colId];
-      if (f) { filters[facet.colId] = f; }
+      if (f && (!f.mode || f.mode === facet.mode)) { filters[facet.colId] = f; }
     }
     S.result = evaluate({ facets: S.facets, filters, ids: S.data.id, search: S.config.search ? S.search : '', searchIndex: S.searchIndex });
     if (reason === 'data') {
@@ -199,7 +213,12 @@ const actions = {
       onSave: async (config) => {
         const next = { ...config, version: 1, id: S.config.id || newId() };
         S.config = normalize(next);
+        // Les filtres en cours passent sous la clé des nouveaux réglages.
+        S.restoredKey = S.activeKey = storageKey();
         rebuild();
+        pruneFilters();
+        refresh();
+        saveNow();
         try {
           // Grist garde les réglages en attente : son bouton « Enregistrer », en haut du widget, les conserve.
           await grist.setOption(OPTION_KEY, next);
@@ -215,7 +234,7 @@ const actions = {
 };
 
 /** Colonnes du tableau (libellés, types, choix…) ; sans accès complet, déduites des valeurs. */
-async function loadColumns() {
+async function loadColumns(data) {
   if (S.access === 'full') {
     try {
       const [tables, columns, sections] = await Promise.all(
@@ -228,7 +247,7 @@ async function loadColumns() {
       console.warn('Filtres : lecture des colonnes', err);
     }
   }
-  return guessColumns(S.data);
+  return guessColumns(data);
 }
 
 /** Vrai si un widget est relié à ce widget par une colonne de référence (voir selection.js). */
@@ -263,9 +282,10 @@ async function loadData() {
       includeColumns: S.access === 'full' ? 'normal' : 'shown',
     });
     if (seq !== loadSeq) { return; }
-    S.data = data;
-    const columns = await loadColumns();
+    const columns = await loadColumns(data);
     if (seq !== loadSeq) { return; }
+    // Données et colonnes changent ensemble : jamais de données sans les colonnes qui vont avec.
+    S.data = data;
     S.columns = columns.filter(c => data[c.colId]);
     const first = S.loading;
     S.loading = false;
@@ -273,6 +293,7 @@ async function loadData() {
     restore();
     rebuild(first ? 'user' : 'data');
   } catch (err) {
+    if (seq !== loadSeq) { return; }
     console.warn('Filtres : lecture des données', err);
     S.loading = false;
     S.error = String(err && err.message || err);

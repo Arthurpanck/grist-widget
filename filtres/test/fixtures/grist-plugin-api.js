@@ -11,6 +11,8 @@
   top.__selected = [];
   top.__savedOptions = options;
 
+  const delays = mock.delays || {};
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms || 0));
   function send(msg) { listeners.forEach(cb => cb(msg)); }
   top.__dataChanged = () => send({ tableId: mock.tableId, dataChange: true });
 
@@ -37,10 +39,12 @@
     },
     docApi: {
       async getDocName() {
+        await wait(delays.docName);
         if (settings.accessLevel === 'none') { throw new Error('Access not granted'); }
         return 'DOC123';
       },
       async fetchTable(tableId) {
+        await wait(delays.meta);
         if (settings.accessLevel !== 'full') { throw new Error('Access denied'); }
         return mock.tables[tableId];
       },
