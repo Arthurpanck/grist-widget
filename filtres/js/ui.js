@@ -124,7 +124,7 @@ export class Panel {
         ? `Table chargée « à la demande » : les tableaux reliés n’affichent que ${fmtInt(GRIST_LIST_LIMIT - RESERVE)} lignes environ. Précisez les filtres.`
         : `Les ${fmtInt(result.rowIds.length)} lignes sont bien affichées, même si Grist indique « Toute la donnée n’est pas visible ».`));
     }
-    this.top.hidden = !facets.length && !config.search;
+    this.top.hidden = (!facets.length && !config.search) || v.access === 'none' || Boolean(v.error);
 
     // Puces des filtres actifs.
     this.chips.replaceChildren(...facets.filter(f => isActive(f, filters[f.colId])).map(f => this._chip(f, filters[f.colId])));
@@ -154,7 +154,11 @@ export class Panel {
 
   _message(v) {
     let content = null;
-    if (v.error) {
+    if (v.access === 'none') {
+      content = v.readonly
+        ? [h('strong', null, 'Ce widget n’a pas encore accès au document.'), h('p', null, 'Demandez à un éditeur du document de lui accorder l’accès complet.')]
+        : [h('strong', null, 'Ce widget a besoin de l’accès complet au document'), h('p', null, 'pour lire les colonnes du tableau. Dans le panneau de droite, rubrique « Niveau d’accès », cliquez sur « Accepter ».')];
+    } else if (v.error) {
       content = [h('strong', null, 'Les données ne peuvent pas être lues.'), h('p', null, v.error)];
     } else if (v.loading) {
       content = [h('p', { class: 'fl-muted' }, 'Chargement…')];
@@ -177,8 +181,14 @@ export class Panel {
     }
     if (!v.readonly && v.linking && v.linking.asSource === false && v.facets.length) {
       parts.push(h('div', { class: 'fl-notice-item' }, icon('link', 15), h('div', null,
-        h('strong', null, 'Reliez ces filtres à un tableau.'), ' Sélectionnez le tableau à filtrer puis, dans le panneau de droite, ',
-        h('em', null, 'Vue'), ' › ', h('em', null, 'Données source'), ' › ', h('em', null, 'Sélectionner par'), ' : choisissez ce widget.')));
+        h('strong', null, 'Reliez ces filtres à un tableau.'), ' Cliquez sur le tableau à filtrer puis, dans le panneau de droite, onglet ',
+        h('em', null, 'Données source'), ', rubrique ', h('em', null, 'Sélectionner par'),
+        ' : choisissez ce widget (nommé par défaut « … Personnalisée »).')));
+    }
+    if (!v.readonly && v.access === 'read table' && v.facets.length) {
+      parts.push(h('div', { class: 'fl-notice-item' }, icon('info', 15), h('div', null,
+        'Accès limité à la table : les libellés, couleurs et types des colonnes ne sont pas lus. Accordez l’',
+        h('em', null, 'Accès complet au document'), ' dans le panneau de droite, rubrique ', h('em', null, 'Niveau d’accès'), '.')));
     }
     if (!v.readonly && !v.config.fields && v.facets.length) {
       parts.push(h('div', { class: 'fl-notice-item' }, icon('filter', 15), h('div', null,

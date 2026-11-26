@@ -19,7 +19,8 @@
       top.__ready = config;
       setTimeout(() => {
         onOptions && onOptions(options, settings);
-        send({ tableId: mock.tableId, dataChange: true });
+        // Sans accès accordé, Grist n'envoie pas les données.
+        if (settings.accessLevel !== 'none') { send({ tableId: mock.tableId, dataChange: true }); }
       }, 20);
     },
     on(event, cb) { if (event === 'message') { listeners.push(cb); } },
@@ -35,7 +36,10 @@
       setTimeout(() => onOptions && onOptions(options, settings), 10);
     },
     docApi: {
-      async getDocName() { return 'DOC123'; },
+      async getDocName() {
+        if (settings.accessLevel === 'none') { throw new Error('Access not granted'); }
+        return 'DOC123';
+      },
       async fetchTable(tableId) {
         if (settings.accessLevel !== 'full') { throw new Error('Access denied'); }
         return mock.tables[tableId];

@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { autoFields, effectiveFields, normalize } from '../js/config.js';
 import { buildFacet, buildSearchIndex, evaluate, isActive, modesFor, resolvePreset } from '../js/engine.js';
 import { BLANK, ERROR, cellItems, describeColumns, formatValue, guessColumns, parseNumberInput, toDay } from '../js/model.js';
-import { RESERVE, Selection } from '../js/selection.js';
+import { RESERVE, Selection, refLinked } from '../js/selection.js';
 
 const day = (y, m, d) => Date.UTC(y, m - 1, d) / 1000;
 
@@ -195,4 +195,31 @@ test('liste transmise à Grist : null sans filtre, réserve pour les lignes ajou
   // Une ligne créée (identifiant réservé) est déjà affichée.
   assert.equal(sel.missing({ active: true, rowIds: [1, 7] }), 0);
   assert.deepEqual(sel.fresh({ active: false, rowIds: ids }, ids), { rows: null, activated: false });
+});
+
+test('sans filtre, liste complète (avec 0) quand un widget est relié par une colonne de référence', () => {
+  const sel = new Selection();
+  const out = sel.fresh({ active: false, rowIds: DATA.id }, DATA.id, { listWhenInactive: true });
+  assert.deepEqual(out.rows.slice(0, 6), DATA.id);
+  assert.equal(out.rows[out.rows.length - 1], 0);
+  assert.equal(out.activated, true);
+});
+
+test('repérer un widget relié par une colonne de référence', () => {
+  const url = 'https://exemple.test/filtres/index.html?access=full';
+  const view = (u, widgetOptions) => JSON.stringify({ customView: JSON.stringify({ mode: 'url', url: u, widgetOptions }) });
+  const sections = {
+    id: [1, 2, 3, 4, 5],
+    parentKey: ['custom', 'record', 'custom', 'record', 'custom'],
+    tableRef: [1, 1, 1, 2, 1],
+    options: [view('https://exemple.test/filtres/index.html', { filtres: { id: 'a' } }), '', view('https://exemple.test/filtres/index.html', { filtres: { id: 'b' } }), '', view('https://autre.test/carte/index.html')],
+    linkSrcSectionRef: [0, 1, 0, 3, 0],
+    linkTargetColRef: [0, 0, 0, 42, 0],
+  };
+  // Le widget « b » a une table reliée par référence (section 4), le widget « a » non.
+  assert.equal(refLinked(sections, 1, { url, configId: 'a', optionKey: 'filtres' }), false);
+  assert.equal(refLinked(sections, 1, { url, configId: 'b', optionKey: 'filtres' }), true);
+  // Réglages non enregistrés : tous les widgets Filtres de la table comptent.
+  assert.equal(refLinked(sections, 1, { url, configId: null, optionKey: 'filtres' }), true);
+  assert.equal(refLinked(sections, 2, { url, configId: null, optionKey: 'filtres' }), false);
 });

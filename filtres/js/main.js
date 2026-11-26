@@ -9,7 +9,7 @@
 import { OPTION_KEY, effectiveFields, newId, normalize } from './config.js';
 import { LIST_MODES, buildFacet, buildSearchIndex, evaluate, isActive } from './engine.js';
 import { describeColumns, guessColumns } from './model.js';
-import { RESERVE, Selection } from './selection.js';
+import { RESERVE, Selection, refLinked } from './selection.js';
 import { openSettings } from './settings.js';
 import { Panel } from './ui.js';
 import * as store from './store.js';
@@ -40,6 +40,7 @@ const S = {
   selection: new Selection(),
   missing: 0,
   onDemand: false,
+  refTargets: false,
 };
 
 let panel = null;
@@ -112,7 +113,9 @@ function refresh(reason = 'user') {
     }
     S.result = evaluate({ facets: S.facets, filters, ids: S.data.id, search: S.config.search ? S.search : '', searchIndex: S.searchIndex });
     if (reason === 'data') {
-      S.missing = S.selection.missing(S.result);
+      S.missing = S.selection.missing(S.result, S.data.id);
+      // Sans filtre, toutes les lignes doivent rester visibles : la liste complète est renvoyée.
+      if (S.missing && !S.result.active) { send(); }
     } else {
       send();
     }
@@ -126,14 +129,14 @@ function render() {
   panel.update({
     facets: S.facets, filters: S.filters, result: S.result, search: S.search, config: S.config,
     readonly: S.readonly, collapsed: S.collapsed, loading: S.loading, error: S.error, linking: S.linking,
-    missing: S.missing, onDemand: S.onDemand,
+    missing: S.missing, onDemand: S.onDemand, access: S.access,
   });
 }
 
 /** Transmet à Grist les lignes retenues, si elles ont changé. */
 function send() {
   S.missing = 0;
-  const out = S.selection.fresh(S.result, S.data.id);
+  const out = S.selection.fresh(S.result, S.data.id, { listWhenInactive: S.refTargets });
   if (!out) { return; }
   const push = rows => grist.setSelectedRows(rows).catch(err => console.warn('Filtres : setSelectedRows', err));
   push(out.rows);
@@ -215,15 +218,38 @@ const actions = {
 async function loadColumns() {
   if (S.access === 'full') {
     try {
-      const [tables, columns] = await Promise.all([grist.docApi.fetchTable('_grist_Tables'), grist.docApi.fetchTable('_grist_Tables_column')]);
+      const [tables, columns, sections] = await Promise.all(
+        ['_grist_Tables', '_grist_Tables_column', '_grist_Views_section'].map(t => grist.docApi.fetchTable(t)));
       const i = tables.tableId.indexOf(S.tableId);
       S.onDemand = i >= 0 && Boolean(tables.onDemand && tables.onDemand[i]);
+      S.refTargets = hasRefTargets(sections, i >= 0 ? tables.id[i] : null);
       return describeColumns(S.tableId, tables, columns);
     } catch (err) {
       console.warn('Filtres : lecture des colonnes', err);
     }
   }
   return guessColumns(S.data);
+}
+
+/** Vrai si un widget est relié à ce widget par une colonne de référence (voir selection.js). */
+function hasRefTargets(sections, tableRef) {
+  return refLinked(sections, tableRef, { url: location.href, configId: S.config.id, optionKey: OPTION_KEY });
+}
+
+/** Relit les liaisons du document ; si leur nature change, renvoie la liste des lignes. */
+async function checkLinks() {
+  try {
+    const [tables, sections] = await Promise.all(['_grist_Tables', '_grist_Views_section'].map(t => grist.docApi.fetchTable(t)));
+    const i = tables.tableId.indexOf(S.tableId);
+    const refTargets = hasRefTargets(sections, i >= 0 ? tables.id[i] : null);
+    if (refTargets !== S.refTargets) {
+      S.refTargets = refTargets;
+      S.selection.reset();
+      refresh();
+    }
+  } catch (err) {
+    console.warn('Filtres : lecture des liaisons', err);
+  }
 }
 
 let loadSeq = 0;
@@ -274,11 +300,21 @@ function start() {
     S.config = normalize(options && options[OPTION_KEY]);
     const accessChanged = settingsInfo && settingsInfo.accessLevel !== S.access;
     S.access = settingsInfo ? settingsInfo.accessLevel : S.access;
-    S.linking = settingsInfo && settingsInfo.linking ? settingsInfo.linking : null;
+    const linking = settingsInfo && settingsInfo.linking ? settingsInfo.linking : null;
+    const linkingChanged = JSON.stringify(linking) !== JSON.stringify(S.linking);
+    S.linking = linking;
+    // Un widget vient d'être relié (ou détaché) : la façon de transmettre les lignes peut changer.
+    if (linkingChanged && !accessChanged && S.data && S.access === 'full') { checkLinks(); }
+    if (accessChanged && !S.docId) { loadDocName(); }
     if (accessChanged && S.tableId) { loadData(); return; }
     if (JSON.stringify(S.config) !== before) { S.restoredKey = null; restore(); rebuild(); }
     else { render(); }
   });
+  loadDocName();
+}
+
+/** Identifiant du document (clé de mémorisation des filtres) ; lisible une fois l'accès accordé. */
+function loadDocName() {
   grist.docApi.getDocName().then(id => { S.docId = id; S.restoredKey = null; if (S.data) { restore(); rebuild(); } }).catch(() => {});
 }
 

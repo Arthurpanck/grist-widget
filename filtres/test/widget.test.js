@@ -68,13 +68,13 @@ after(async () => { await browser?.close(); });
  * Ouvre le widget. Options : options (réglages enregistrés), readonly, linked, width, height,
  * context (pour garder le stockage du navigateur d'une ouverture à l'autre).
  */
-async function openWidget({ options = null, readonly = false, linked = true, width = 320, height = 800, context = null } = {}) {
+async function openWidget({ options = null, readonly = false, linked = true, access = 'full', width = 320, height = 800, context = null, waitFor = '.fl-facet' } = {}) {
   const ctx = context || await browser.newContext({ viewport: { width: Math.max(width + 40, 800), height: height + 40 } });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') { errors.push(m.text()); } });
-  await page.addInitScript((mock) => { if (window === window.top) { window.__mock = mock; } }, { ...makeDoc(), options, linked });
+  await page.addInitScript((mock) => { if (window === window.top) { window.__mock = mock; } }, { ...makeDoc(), options, linked, access });
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.href.startsWith('https://docs.getgrist.com/grist-plugin-api.js')) {
@@ -92,7 +92,7 @@ async function openWidget({ options = null, readonly = false, linked = true, wid
   });
   await page.goto(`${ORIGIN}/grist.html`);
   const frame = page.frames().find(f => f.url().includes('/index.html'));
-  await frame.waitForSelector('.fl-facet');
+  await frame.waitForSelector(waitFor);
   return { page, frame, errors, context: ctx };
 }
 
@@ -221,6 +221,22 @@ test('lecteur : ni configuration ni bandeaux d’aide', async () => {
   const { page, frame } = await openWidget({ readonly: true, linked: false });
   assert.equal(await frame.locator('.fl-settings-btn').isHidden(), true);
   assert.equal(await frame.locator('.fl-notice').isHidden(), true);
+  await page.close();
+});
+
+test('accès pas encore accordé : explique quoi faire, au lieu de « Chargement… »', async () => {
+  const { page, frame } = await openWidget({ access: 'none', waitFor: '.fl-message:not([hidden])' });
+  await frame.waitForFunction(() => /Accepter/.test(document.querySelector('.fl-message').textContent));
+  assert.equal(await frame.locator('.fl-top').isHidden(), true);
+  await page.close();
+});
+
+test('accès limité à la table : colonnes déduites des valeurs, et le configurateur est prévenu', async () => {
+  const { page, frame } = await openWidget({ access: 'read table' });
+  assert.match(await frame.locator('.fl-notice').textContent(), /Accès limité/);
+  assert.equal(await page.evaluate(() => window.__fetchOptions.includeColumns), 'shown');
+  await value(frame, 'Statut', 'Terminé').click();
+  await waitSelected(page, expectIds(i => i % 3 === 2));
   await page.close();
 });
 
