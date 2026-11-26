@@ -53,6 +53,12 @@ export const PRESETS = [
   ['future', "À partir d'aujourd'hui"],
 ];
 
+/** Choix sur la présence d'une date, proposés à la suite des périodes. */
+export const PRESENCE = [
+  ['blank', 'Sans date'],
+  ['notBlank', 'Avec une date'],
+];
+
 const pad = n => String(n).padStart(2, '0');
 const dayOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const shift = (d, days) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
@@ -187,6 +193,8 @@ function makeTest(facet, f, now) {
     return i => v[i] !== null && v[i] >= min && v[i] <= max;
   }
   if (facet.mode === 'period') {
+    if (f.preset === 'blank') { return i => v[i] === null; }
+    if (f.preset === 'notBlank') { return i => v[i] !== null; }
     const { from, to } = f.preset ? resolvePreset(f.preset, now) : { from: f.from || null, to: f.to || null };
     return i => v[i] !== null && (!from || v[i] >= from) && (!to || v[i] <= to);
   }

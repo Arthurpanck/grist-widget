@@ -115,7 +115,8 @@ button { cursor: pointer; }
 }
 .fl-count { color: var(--fl-muted); font-variant-numeric: tabular-nums; }
 .fl-count strong { color: var(--fl-text); font-weight: 600; }
-.fl-chips-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.fl-chips-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.fl-chips-row > .fl-chips { min-width: 0; max-width: 100%; }
 .fl-reset { font-size: 12px; }
 .fl-limit-note { display: flex; gap: 6px; align-items: flex-start; font-size: 11px; color: var(--fl-muted); }
 .fl-limit-note .fl-icon { margin-top: 1px; }

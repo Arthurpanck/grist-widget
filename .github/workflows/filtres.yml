@@ -1,0 +1,36 @@
+# Tests du widget Filtres, à chaque modification de son dossier : moteur de filtrage (Node) et widget
+# dans Chromium, avec un faux Grist.
+name: Filtres
+
+on:
+  push:
+    paths:
+      - "filtres/**"
+      - ".github/workflows/filtres.yml"
+  pull_request:
+    paths:
+      - "filtres/**"
+      - ".github/workflows/filtres.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: filtres
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        run: npm install --no-save playwright@1.49.1
+
+      - name: Install the browser used by the tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Test
+        run: npm test

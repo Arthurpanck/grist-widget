@@ -7,7 +7,7 @@
  */
 
 import { debounce, fmtInt, h, icon, plural } from './dom.js';
-import { LIST_MODES, PRESETS, describeValue, isActive, resolvePreset } from './engine.js';
+import { LIST_MODES, PRESENCE, PRESETS, describeValue, isActive, resolvePreset } from './engine.js';
 import { GRIST_LIST_LIMIT, RESERVE } from './selection.js';
 import { displayColumn, fold, formatCompact, formatDay, formatNumberInput, parseNumberInput } from './model.js';
 
@@ -18,7 +18,7 @@ const GRID_WIDTH = 620;
 /** Hauteur en dessous de laquelle un widget large devient un bandeau (une seule rangée de blocs). */
 const BAND_HEIGHT = 420;
 
-const PRESET_LABELS = new Map(PRESETS);
+const PRESET_LABELS = new Map([...PRESETS, ...PRESENCE]);
 
 /** Texte court d'un filtre actif, pour sa puce et pour l'en-tête d'un bloc replié. */
 export function summarize(facet, f) {
@@ -117,12 +117,14 @@ export class Panel {
     this.resetBtn.hidden = !anyActive;
     // Au-delà de 500 lignes transmises, Grist affiche « Toute la donnée n'est pas visible » sous le
     // tableau relié. C'est faux pour une table ordinaire, vrai pour une table chargée « à la demande ».
-    const overLimit = anyActive && result.rowIds.length + RESERVE > GRIST_LIST_LIMIT;
+    // Sans filtre, une liste n'est transmise que si un widget est relié par une colonne de référence.
+    const sent = result ? (anyActive ? result.rowIds.length : (v.listMode ? result.total : 0)) : 0;
+    const overLimit = sent > 0 && sent + RESERVE > GRIST_LIST_LIMIT;
     this.limitNote.hidden = !overLimit;
     if (overLimit) {
       this.limitNote.replaceChildren(icon('info', 13), h('span', null, v.onDemand
         ? `Table chargée « à la demande » : les tableaux reliés n’affichent que ${fmtInt(GRIST_LIST_LIMIT - RESERVE)} lignes environ. Précisez les filtres.`
-        : `Les ${fmtInt(result.rowIds.length)} lignes sont bien affichées, même si Grist indique « Toute la donnée n’est pas visible ».`));
+        : `Les ${fmtInt(sent)} lignes sont bien affichées, même si Grist indique « Toute la donnée n’est pas visible ».`));
     }
     this.top.hidden = (!facets.length && !config.search) || v.access === 'none' || Boolean(v.error);
 
@@ -499,17 +501,17 @@ class PeriodBody {
     this.view = view;
     this.preset = h('select', { class: 'fl-select', 'aria-label': 'Période', onchange: () => this._choose(this.preset.value) },
       h('option', { value: '' }, 'Toutes les dates'),
-      PRESETS.map(([id, label]) => h('option', { value: id }, label)),
-      h('option', { value: 'custom' }, 'Dates personnalisées…'));
+      h('optgroup', { label: 'Période' }, PRESETS.map(([id, label]) => h('option', { value: id }, label)),
+        h('option', { value: 'custom' }, 'Dates personnalisées…')),
+      h('optgroup', { label: 'Date renseignée ou non' }, PRESENCE.map(([id, label]) => h('option', { value: id }, label))));
     const make = (name) => h('input', { type: 'date', class: 'fl-input fl-date', 'aria-label': name, onchange: () => this._dates() });
     this.from = make('Du');
     this.to = make('Au');
     this.hint = h('div', { class: 'fl-range-hint' });
-    this.el = h('div', { class: 'fl-period' }, this.preset,
-      h('div', { class: 'fl-range-row' },
-        h('label', { class: 'fl-field' }, h('span', null, 'Du'), this.from),
-        h('label', { class: 'fl-field' }, h('span', null, 'Au'), this.to)),
-      this.hint);
+    this.dates = h('div', { class: 'fl-range-row' },
+      h('label', { class: 'fl-field' }, h('span', null, 'Du'), this.from),
+      h('label', { class: 'fl-field' }, h('span', null, 'Au'), this.to));
+    this.el = h('div', { class: 'fl-period' }, this.preset, this.dates, this.hint);
   }
 
   focus() { this.preset.focus({ preventScroll: true }); }
@@ -536,9 +538,11 @@ class PeriodBody {
     this.f = f;
     if (!f) { this.custom = this.custom && document.activeElement && this.el.contains(document.activeElement); }
     this._syncSelect();
-    const { from, to } = f && f.preset ? resolvePreset(f.preset) : { from: f ? f.from : null, to: f ? f.to : null };
+    const presence = Boolean(f && (f.preset === 'blank' || f.preset === 'notBlank'));
+    const { from, to } = f && f.preset && !presence ? resolvePreset(f.preset) : { from: f ? f.from : null, to: f ? f.to : null };
     if (document.activeElement !== this.from) { this.from.value = from || ''; }
     if (document.activeElement !== this.to) { this.to.value = to || ''; }
+    this.dates.hidden = presence;
     this.hint.textContent = bounds && bounds.min
       ? (bounds.min === bounds.max ? `Une seule date : ${formatDay(bounds.min)}` : `Du ${formatDay(bounds.min)} au ${formatDay(bounds.max)}`)
       : 'Aucune date';

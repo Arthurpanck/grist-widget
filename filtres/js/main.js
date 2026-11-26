@@ -129,7 +129,7 @@ function render() {
   panel.update({
     facets: S.facets, filters: S.filters, result: S.result, search: S.search, config: S.config,
     readonly: S.readonly, collapsed: S.collapsed, loading: S.loading, error: S.error, linking: S.linking,
-    missing: S.missing, onDemand: S.onDemand, access: S.access,
+    missing: S.missing, onDemand: S.onDemand, access: S.access, listMode: S.refTargets,
   });
 }
 
@@ -233,6 +233,8 @@ async function loadColumns() {
 
 /** Vrai si un widget est relié à ce widget par une colonne de référence (voir selection.js). */
 function hasRefTargets(sections, tableRef) {
+  // Grist dit si un widget est relié à celui-ci ; sinon, inutile de chercher.
+  if (S.linking && S.linking.asSource === false) { return false; }
   return refLinked(sections, tableRef, { url: location.href, configId: S.config.id, optionKey: OPTION_KEY });
 }
 

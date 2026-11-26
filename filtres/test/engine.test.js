@@ -117,6 +117,8 @@ test('périodes prêtes à l’emploi', () => {
   const debut = facet('Debut');
   assert.deepEqual(run([debut], { Debut: { preset: 'year' } }, { now }).rowIds, [2, 3]);
   assert.deepEqual(run([debut], { Debut: { from: '2024-07-09', to: null } }).rowIds, [2, 3, 5, 6]);
+  assert.deepEqual(run([debut], { Debut: { preset: 'blank' } }).rowIds, [4]);
+  assert.deepEqual(run([debut], { Debut: { preset: 'notBlank' } }).rowIds, [1, 2, 3, 5, 6]);
 });
 
 test('dates par année, les plus récentes d’abord', () => {
