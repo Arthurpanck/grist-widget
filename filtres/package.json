@@ -1,0 +1,26 @@
+{
+  "name": "@arthurpanck/widget-filtres",
+  "private": true,
+  "type": "module",
+  "description": "Panneau de filtres : filtrer plusieurs champs à la fois par cases à cocher, avec le nombre de lignes par valeur.",
+  "homePage": "https://github.com/Arthurpanck/grist-widget/tree/master/filtres",
+  "version": "1.0.0",
+  "grist": {
+    "name": "Filtres",
+    "url": "https://arthurpanck.github.io/grist-widget/filtres/index.html",
+    "widgetId": "@arthurpanck/widget-filtres",
+    "published": true,
+    "accessLevel": "full",
+    "renderAfterReady": true,
+    "description": "Filtrer plusieurs champs à la fois par cases à cocher, avec le nombre de lignes par valeur, des plages de montants et de dates, une recherche globale. Les widgets reliés n'affichent que les lignes retenues.",
+    "authors": [
+      {
+        "name": "Arthurpanck",
+        "url": "https://github.com/Arthurpanck"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 test/*.test.js"
+  }
+}
