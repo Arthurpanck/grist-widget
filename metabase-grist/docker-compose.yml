@@ -1,0 +1,76 @@
+# Grist + Metabase on the same host/cluster, sharing Grist's document volume.
+#
+#   docker compose up -d
+#   Grist    -> http://localhost:8484
+#   Metabase -> http://localhost:3000
+#
+# Metabase reads the .grist files (SQLite) through a READ-ONLY mount of Grist's
+# /persist volume, either with the built-in SQLite driver or with the "grist"
+# driver of this folder (plugins/grist.metabase-driver.jar).
+
+name: grist-metabase
+
+services:
+  grist:
+    image: ${GRIST_IMAGE:-gristlabs/grist:latest}
+    environment:
+      GRIST_SESSION_SECRET: ${GRIST_SESSION_SECRET:-change-me-in-prod}
+      # Single-user demo login: everyone is this user. Use OIDC/SAML in production.
+      GRIST_DEFAULT_EMAIL: ${GRIST_DEFAULT_EMAIL:-admin@example.com}
+      GRIST_ADMIN_EMAIL: ${GRIST_DEFAULT_EMAIL:-admin@example.com}
+      # Skip the first-run /boot wizard (configuration comes from env vars).
+      GRIST_IN_SERVICE: "true"
+      GRIST_SINGLE_ORG: docs
+      APP_HOME_URL: http://localhost:8484
+    volumes:
+      - grist-persist:/persist
+    ports:
+      - "8484:8484"
+
+  metabase-db:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    environment:
+      POSTGRES_DB: metabase
+      POSTGRES_USER: metabase
+      POSTGRES_PASSWORD: ${MB_DB_PASS:-metabase}
+    volumes:
+      - metabase-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metabase"]
+      interval: 5s
+      retries: 20
+
+  metabase:
+    image: ${METABASE_IMAGE:-metabase/metabase:v0.65.7.3}
+    # Metabase needs a writable plugins directory: copy the driver there at start (as the initContainer does on OpenShift).
+    entrypoint: ["sh", "-c", "cp /opt/grist-driver/*.jar /plugins/ && exec /app/run_metabase.sh"]
+    depends_on:
+      metabase-db:
+        condition: service_healthy
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_HOST: metabase-db
+      MB_DB_PORT: 5432
+      MB_DB_DBNAME: metabase
+      MB_DB_USER: metabase
+      MB_DB_PASS: ${MB_DB_PASS:-metabase}
+      MB_PLUGINS_DIR: /plugins
+      # Snapshots of Grist documents taken by the grist driver (a cache, lost on restart).
+      MB_GRIST_CACHE_DIR: /tmp/metabase-grist
+      # Metabase may only open files under these directories (SQLite + grist drivers).
+      MB_READABLE_PATHS: /grist/docs,/tmp/metabase-grist
+      MB_WRITABLE_PATHS: NONE
+      MB_ANON_TRACKING_ENABLED: "false"
+      MB_CHECK_FOR_UPDATES: "false"
+    volumes:
+      # Grist's documents, read-only for Metabase.
+      - grist-persist:/grist:ro
+      - ./plugins:/opt/grist-driver:ro
+      - metabase-plugins:/plugins
+    ports:
+      - "3000:3000"
+
+volumes:
+  grist-persist:
+  metabase-plugins:
+  metabase-db:

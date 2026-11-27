@@ -1,0 +1,143 @@
+# Metabase with the Grist driver, next to an existing Grist, on OpenShift.
+#
+# Prerequisites (same namespace):
+#   - a Grist Service reachable at http://grist:8484 (adapt GRIST_URL below)
+#   - a PostgreSQL database for Metabase's own data (adapt MB_DB_* below)
+#   - the driver jar as a ConfigMap:
+#       oc create configmap metabase-grist-driver --from-file=plugins/grist.metabase-driver.jar
+#   - the secrets:
+#       oc create secret generic metabase-grist \
+#         --from-literal=mb-db-pass=... \
+#         --from-literal=mb-encryption-secret-key="$(openssl rand -base64 32)" \
+#         --from-literal=grist-api-key=...        # API key of a Grist service account (read access to the docs)
+#         --from-literal=metabase-api-key=...     # Metabase API key (Admin > Authentication > API keys), group Admin
+#
+# Nothing here needs a custom SCC: every container runs under the namespace's random UID,
+# and no volume is shared with Grist (the driver downloads snapshots through Grist's API).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metabase
+  labels: {app: metabase}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: metabase}
+  template:
+    metadata:
+      labels: {app: metabase}
+    spec:
+      initContainers:
+        # Metabase needs a writable plugins directory: copy the driver into an emptyDir.
+        - name: install-grist-driver
+          image: metabase/metabase:v0.65.7.3
+          command: ["sh", "-c", "cp /driver/grist.metabase-driver.jar /plugins/"]
+          volumeMounts:
+            - {name: driver, mountPath: /driver}
+            - {name: plugins, mountPath: /plugins}
+          securityContext: &restricted
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: metabase
+          # Pin the version: the driver relies on Metabase's driver API, test it before each upgrade.
+          image: metabase/metabase:v0.65.7.3
+          ports:
+            - {containerPort: 3000, name: http}
+          env:
+            - {name: MB_DB_TYPE, value: postgres}
+            - {name: MB_DB_HOST, value: metabase-db}
+            - {name: MB_DB_PORT, value: "5432"}
+            - {name: MB_DB_DBNAME, value: metabase}
+            - {name: MB_DB_USER, value: metabase}
+            - name: MB_DB_PASS
+              valueFrom: {secretKeyRef: {name: metabase-grist, key: mb-db-pass}}
+            # Encrypts connection details (including the Grist API key) in Metabase's database.
+            - name: MB_ENCRYPTION_SECRET_KEY
+              valueFrom: {secretKeyRef: {name: metabase-grist, key: mb-encryption-secret-key}}
+            - {name: MB_PLUGINS_DIR, value: /plugins}
+            - {name: MB_GRIST_CACHE_DIR, value: /grist-cache}
+            # Only the snapshot cache may be opened as a SQLite file; nothing may be written.
+            - {name: MB_READABLE_PATHS, value: /grist-cache}
+            - {name: MB_WRITABLE_PATHS, value: NONE}
+            - {name: JAVA_OPTS, value: "-XX:MaxRAMPercentage=75"}
+          volumeMounts:
+            - {name: plugins, mountPath: /plugins}
+            - {name: grist-cache, mountPath: /grist-cache}
+          readinessProbe:
+            httpGet: {path: /api/health, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /api/health, port: http}
+            initialDelaySeconds: 180
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 500m, memory: 2Gi}
+            limits: {memory: 3Gi}
+          securityContext: *restricted
+      volumes:
+        - name: driver
+          configMap: {name: metabase-grist-driver}
+        - name: plugins
+          emptyDir: {}
+        # Snapshots of Grist documents: a cache, rebuilt after a restart. Size it for the documents you register.
+        - name: grist-cache
+          emptyDir: {sizeLimit: 5Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metabase
+spec:
+  selector: {app: metabase}
+  ports:
+    - {name: http, port: 3000, targetPort: http}
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: metabase
+spec:
+  to: {kind: Service, name: metabase}
+  port: {targetPort: http}
+  tls: {termination: edge, insecureEdgeTerminationPolicy: Redirect}
+---
+# Registers every Grist document the service account can read as a Metabase database, and applies the Grist labels.
+#   oc create configmap grist-register-docs --from-file=scripts/register_docs.py
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: grist-register-docs
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: register
+              image: registry.access.redhat.com/ubi9/python-312
+              command: ["python3", "/scripts/register_docs.py"]
+              env:
+                - {name: GRIST_URL, value: "http://grist:8484"}
+                - {name: METABASE_URL, value: "http://metabase:3000"}
+                - {name: REFRESH_SECONDS, value: "300"}
+                - name: GRIST_API_KEY
+                  valueFrom: {secretKeyRef: {name: metabase-grist, key: grist-api-key}}
+                - name: METABASE_API_KEY
+                  valueFrom: {secretKeyRef: {name: metabase-grist, key: metabase-api-key}}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts}
+              securityContext:
+                allowPrivilegeEscalation: false
+                runAsNonRoot: true
+                capabilities: {drop: [ALL]}
+                seccompProfile: {type: RuntimeDefault}
+          volumes:
+            - name: scripts
+              configMap: {name: grist-register-docs}

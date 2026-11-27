@@ -1,0 +1,37 @@
+info:
+  name: Metabase Grist Driver
+  version: 0.1.0
+  description: >-
+    Reads Grist documents (.grist files are SQLite) from a snapshot taken through the Grist REST API or copied
+    from a mounted file. Hides Grist's internal tables and uses Grist's column types (dates, references...).
+driver:
+  - name: grist
+    display-name: Grist
+    lazy-load: true
+    parent: sqlite
+    connection-properties:
+      - name: grist-url
+        display-name: URL du serveur Grist
+        placeholder: http://grist:8484
+        helper-text: Laisser vide pour lire un fichier .grist monté (champ « Chemin du fichier »).
+      - name: doc-id
+        display-name: Identifiant du document
+        placeholder: dvy4ya4xdf19W3gVT57ttr
+        helper-text: La partie après /doc/ ou /o/<org>/ dans l'URL du document.
+      - name: api-key
+        display-name: Clé API Grist
+        type: password
+        helper-text: Clé d'un compte de service ayant accès en lecture au document entier.
+      - name: doc-path
+        display-name: Chemin du fichier .grist (au lieu de l'API)
+        placeholder: /grist/docs/dvy4ya4xdf19W3gVT57ttr.grist
+      - name: refresh-seconds
+        display-name: Fraîcheur de l'instantané (secondes)
+        type: integer
+        default: 60
+        placeholder: 60
+      - advanced-options-start
+      - default-advanced-options
+init:
+  - step: load-namespace
+    namespace: metabase.driver.grist
