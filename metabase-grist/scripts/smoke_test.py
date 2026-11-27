@@ -43,10 +43,11 @@ def check(name, cond, detail=""):
 
 
 doc = subprocess.check_output([sys.executable, os.path.join(HERE, "seed_demo.py")], text=True).strip()
-db = mb("POST", "/api/database", {"engine": "grist", "name": f"smoke {doc}", "details": {
-    "grist-url": os.environ.get("GRIST_URL_FOR_METABASE", GRIST_URL), "doc-id": doc, "api-key": GRIST_KEY,
-    "refresh-seconds": 5}})["id"]
+db = None
 try:
+    db = mb("POST", "/api/database", {"engine": "grist", "name": f"smoke {doc}", "details": {
+        "grist-url": os.environ.get("GRIST_URL_FOR_METABASE", GRIST_URL), "doc-id": doc, "api-key": GRIST_KEY,
+        "refresh-seconds": 5}})["id"]
     for _ in range(60):
         if mb("GET", f"/api/database/{db}")["initial_sync_status"] == "complete":
             break
@@ -93,7 +94,8 @@ try:
         check("Grist writes while Metabase runs a long query", False, e)
     long_query.join()
 finally:
-    mb("DELETE", f"/api/database/{db}")
+    if db is not None:
+        mb("DELETE", f"/api/database/{db}")
     grist("DELETE", f"/api/docs/{doc}")
 
 print("\n" + ("ALL OK" if not failures else f"{len(failures)} FAILED: {failures}"))

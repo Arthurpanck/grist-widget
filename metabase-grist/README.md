@@ -54,7 +54,7 @@ Il s'agit d'un pilote Metabase qui hérite du pilote SQLite intégré (`driver/s
   `MB_READABLE_PATHS`.
 
 `scripts/register_docs.py` enregistre tous les documents visibles par le compte de service, à raison d'une base
-Metabase par document. Il est idempotent et peut tourner en CronJob. Il applique aussi les libellés Grist comme noms
+Metabase par document. Il est idempotent (testé avec une clé API Metabase et avec identifiant et mot de passe) et peut tourner en CronJob. Il applique aussi les libellés Grist comme noms
 d'affichage Metabase (« Date de commande » plutôt que « Date Commande »).
 
 ![Formulaire de connexion](docs/connexion.png)
@@ -144,7 +144,7 @@ d'auto-enregistrement. Rien ne demande de SCC particulier :
 - l'authentification OIDC ;
 - plusieurs réplicas Metabase ;
 - des documents volumineux ;
-- le script d'auto-enregistrement avec une clé API Metabase (testé avec identifiant et mot de passe).
+- la validation des manifestes contre les schémas Kubernetes/OpenShift (seule leur syntaxe YAML a été vérifiée).
 
 **Alternative sans code Metabase :** répliquer périodiquement les tables Grist vers PostgreSQL (script, n8n…) et
 brancher Metabase sur PostgreSQL. C'est plus robuste pour de gros volumes, mais c'est un pipeline de plus à
