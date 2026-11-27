@@ -106,7 +106,13 @@ d'auto-enregistrement. Rien ne demande de SCC particulier :
 - Grist est joint par son Service (`http://grist:8484`), sans volume partagé ;
 - la version de Metabase est épinglée (`v0.65.7.3`).
 
-## 5. Avis sur l'intégration en production
+## 5. Sécurité
+
+Voir **[SECURITE.md](SECURITE.md)** : compte de service Grist en lecture seule (testé), pourquoi ne jamais brancher
+Metabase sur la base PostgreSQL de Grist (aucune donnée métier, mais toutes les clés API en clair), comportement face
+aux règles d'accès fines, secrets, NetworkPolicy et droits Metabase.
+
+## 6. Avis sur l'intégration en production
 
 **Faisable, effort modéré.** Comptez 1 à 2 jours pour un ops OpenShift, plus la mise au point des droits. Les points
 à arbitrer :
@@ -114,7 +120,7 @@ d'auto-enregistrement. Rien ne demande de SCC particulier :
 1. **Maintenance du pilote (risque principal).** Il s'appuie sur l'API interne des pilotes Metabase, qui évolue
    souvent. Il faut épingler la version de Metabase et passer `smoke_test.py` avant chaque montée de version. Les
    pilotes communautaires ne sont pas acceptés sur Metabase Cloud, mais c'est sans objet en auto-hébergé.
-2. **Droits d'accès.** Le compte de service doit pouvoir lire *tout* le document : Grist n'autorise `/download`
+2. **Droits d'accès.** Le compte de service (fonction de Grist, à activer) doit pouvoir lire *tout* le document : Grist n'autorise `/download`
    qu'aux propriétaires ou aux comptes qui peuvent tout lire. Les règles d'accès fines de Grist (lignes ou colonnes)
    **ne sont pas reproduites** dans Metabase, ce sont les permissions Metabase qui prennent le relais :
    - par base, donc par document : OK en édition open source ;

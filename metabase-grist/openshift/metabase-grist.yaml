@@ -9,7 +9,8 @@
 #       oc create secret generic metabase-grist \
 #         --from-literal=mb-db-pass=... \
 #         --from-literal=mb-encryption-secret-key="$(openssl rand -base64 32)" \
-#         --from-literal=grist-api-key=...        # API key of a Grist service account (read access to the docs)
+#         --from-literal=grist-api-key=...        # key of a Grist service account (GRIST_ENABLE_SERVICE_ACCOUNTS=true on
+#                                                 # Grist), shared as viewer on the documents to publish; see SECURITE.md
 #         --from-literal=metabase-api-key=...     # Metabase API key (Admin > Authentication > API keys), group Admin
 #
 # Nothing here needs a custom SCC: every container runs under the namespace's random UID,
@@ -117,6 +118,8 @@ spec:
     spec:
       backoffLimit: 1
       template:
+        metadata:
+          labels: {app: grist-register-docs}
         spec:
           restartPolicy: Never
           containers:
@@ -141,3 +144,75 @@ spec:
           volumes:
             - name: scripts
               configMap: {name: grist-register-docs}
+---
+# Network isolation (adapt the pod labels to your Grist and database deployments).
+# Grist: reachable only from the OpenShift router (users) and from Metabase and the registration CronJob.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grist-ingress
+spec:
+  podSelector:
+    matchLabels: {app: grist}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {network.openshift.io/policy-group: ingress}
+        - podSelector:
+            matchLabels: {app: metabase}
+        - podSelector:
+            matchLabels: {app: grist-register-docs}
+      ports:
+        - {port: 8484, protocol: TCP}
+---
+# Grist's own PostgreSQL (home database): only Grist. It holds every user's API key in clear text,
+# so no BI tool or other workload may reach it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grist-db-ingress
+spec:
+  podSelector:
+    matchLabels: {app: grist-db}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: grist}
+      ports:
+        - {port: 5432, protocol: TCP}
+---
+# Metabase: only the router (users) and the registration CronJob.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: metabase-ingress
+spec:
+  podSelector:
+    matchLabels: {app: metabase}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {network.openshift.io/policy-group: ingress}
+        - podSelector:
+            matchLabels: {app: grist-register-docs}
+      ports:
+        - {port: 3000, protocol: TCP}
+---
+# Metabase's PostgreSQL: only Metabase.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: metabase-db-ingress
+spec:
+  podSelector:
+    matchLabels: {app: metabase-db}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: metabase}
+      ports:
+        - {port: 5432, protocol: TCP}

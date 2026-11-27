@@ -7,7 +7,8 @@ Idempotent: run it from a CronJob to pick up new documents. For each document it
 
 Environment:
   GRIST_URL          Grist as seen from this script, e.g. http://grist:8484
-  GRIST_API_KEY      API key of the Grist service account
+  GRIST_API_KEY      API key of a Grist service account (GRIST_ENABLE_SERVICE_ACCOUNTS=true on Grist), shared as
+                     viewer on the documents to publish: only those are registered
   GRIST_URL_FOR_METABASE  Grist as seen from Metabase (default: GRIST_URL)
   METABASE_URL       e.g. http://metabase:3000
   METABASE_API_KEY   a Metabase API key (Admin > Authentication > API keys), or
