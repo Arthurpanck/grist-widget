@@ -38,6 +38,9 @@ Il s'agit d'un pilote Metabase qui hérite du pilote SQLite intégré (`driver/s
   - **Mode API** (recommandé) : `GET /api/docs/:docId/download?nohistory=true` avec la clé API d'un compte de
     service. Il n'y a aucun volume partagé, cela fonctionne avec le stockage S3 de Grist et cela traverse le réseau
     du cluster.
+  - **Mode « règles Grist »** (case *Appliquer les règles d'accès Grist de ce compte*) : la copie est reconstruite
+    depuis l'API `/records`, que Grist filtre avec les règles du compte de la clé (lignes, colonnes, tables). La
+    base Metabase ne contient alors que ce que ce compte voit dans Grist (voir [SECURITE.md](SECURITE.md) §6).
   - **Mode fichier** : copie du `.grist` monté par la sauvegarde en ligne de SQLite, qui reste cohérente et ne
     verrouille la source que quelques millisecondes.
 - Chaque requête ouvre sa propre connexion SQLite sur l'instantané courant, ce qui rend visible tout de suite un
@@ -117,8 +120,13 @@ aux règles d'accès fines, secrets, NetworkPolicy et droits Metabase.
 **Faisable, effort modéré.** Comptez 1 à 2 jours pour un ops OpenShift, plus la mise au point des droits. Les points
 à arbitrer :
 
-1. **Maintenance du pilote (risque principal).** Il s'appuie sur l'API interne des pilotes Metabase, qui évolue
-   souvent. Il faut épingler la version de Metabase et passer `smoke_test.py` avant chaque montée de version. Les
+1. **Maintenance du pilote (risque principal, mais modéré).** Il s'appuie sur l'API interne des pilotes Metabase.
+   D'après le [journal des changements](https://github.com/metabase/metabase/blob/master/docs/developers-guide/driver-changelog.md)
+   entre les versions 0.50 et 0.65 (environ deux ans) :
+   - une dizaine de versions touchent une fonction que le pilote utilise, presque toujours par un ajout compatible ;
+   - une seule était cassante : la 0.63, qui a supprimé `describe-table-fks`, que le pilote n'utilise déjà plus.
+
+   Il faut épingler la version de Metabase et passer `smoke_test.py` avant chaque montée de version. Les
    pilotes communautaires ne sont pas acceptés sur Metabase Cloud, mais c'est sans objet en auto-hébergé.
 2. **Droits d'accès.** Le compte de service (fonction de Grist, à activer) doit pouvoir lire *tout* le document : Grist n'autorise `/download`
    qu'aux propriétaires ou aux comptes qui peuvent tout lire. Les règles d'accès fines de Grist (lignes ou colonnes)
@@ -129,7 +137,10 @@ aux règles d'accès fines, secrets, NetworkPolicy et droits Metabase.
    Réservez le SQL natif aux analystes de confiance : il voit tout l'instantané, y compris les tables `_grist_*`
    (règles ACL, pièces jointes…).
 3. **Fraîcheur et charge.** Chaque instantané expiré est retéléchargé en entier, à la demande, par chaque pod
-   Metabase. C'est très bien pour des documents de quelques Mo. Pour de gros documents, augmentez
+   Metabase. Ce n'est pas ce que fait le pilote SQLite natif, qui lit le fichier en place, mais c'est le prix pour ne
+   pas bloquer Grist et se passer d'un volume partagé. Mesures sur 50 400 commandes :
+   - le document sans historique pèse 3,4 Mo et se télécharge en 0,2 s (9,1 Mo avec l'historique) ;
+   - en mode « règles Grist », la copie se reconstruit en environ 1 s. Pour de gros documents, augmentez
    `refresh-seconds` (300 s par défaut dans le CronJob). Au-delà de quelques centaines de Mo, préférez une réplication
    vers PostgreSQL.
 4. **Une base Metabase par document.** Le script d'auto-enregistrement règle ce point, mais les tableaux de bord

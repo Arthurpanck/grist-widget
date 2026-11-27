@@ -4,7 +4,8 @@
   A Grist document is a SQLite file, so this driver is a thin layer over Metabase's built-in `:sqlite` driver:
 
   * It never reads the live document. Metabase queries a local *snapshot*, refreshed at most every
-    `refresh-seconds`, taken either through the Grist REST API (`GET /api/docs/:docId/download`) or, for a mounted
+    `refresh-seconds`, taken through the Grist REST API (`GET /api/docs/:docId/download`), or rebuilt from the
+    records API so that Grist's access rules for the API key's user apply (`respect-access-rules`), or, for a mounted
     `.grist` file, with SQLite's online backup. Reading the live file directly holds SQLite locks that make Grist's own
     writes fail with `SQLITE_BUSY`.
   * Each query opens its own short-lived SQLite connection on the current snapshot, so a refreshed snapshot is seen at
@@ -21,6 +22,7 @@
    [metabase.driver.sql-jdbc.execute :as sql-jdbc.execute]
    [metabase.driver.sql-jdbc.sync :as sql-jdbc.sync]
    [metabase.driver.sqlite]
+   [metabase.util.json :as json]
    [metabase.util.log :as log])
   (:import
    (java.io File)
@@ -29,7 +31,7 @@
    (java.nio.charset StandardCharsets)
    (java.nio.file CopyOption Files StandardCopyOption)
    (java.security MessageDigest)
-   (java.sql Connection DriverManager ResultSet ResultSetMetaData Types)
+   (java.sql Connection DriverManager PreparedStatement ResultSet ResultSetMetaData Types)
    (java.time Duration Instant LocalDate OffsetDateTime ZoneOffset)))
 
 (set! *warn-on-reflection* true)
@@ -63,12 +65,12 @@
 
 (defn- source
   "The document `details` describe, as `{:kind :api ...}` or `{:kind :file ...}`."
-  [{:keys [grist-url doc-id api-key doc-path]}]
+  [{:keys [grist-url doc-id api-key doc-path respect-access-rules]}]
   (cond
     (not (str/blank? grist-url))
     (do (when (str/blank? doc-id)
           (throw (ex-info "Indiquez l'identifiant du document Grist." {:status-code 400})))
-        {:kind    :api
+        {:kind    (if (contains? #{true "true"} respect-access-rules) :records :api)
          :url     (str/replace (str/trim grist-url) #"/+$" "")
          :doc-id  (str/trim doc-id)
          :api-key (some-> api-key str/trim not-empty)})
@@ -80,8 +82,11 @@
     (throw (ex-info "Indiquez l'URL du serveur Grist (avec l'identifiant du document et une clé API) ou le chemin d'un fichier .grist."
                     {:status-code 400}))))
 
-(defn- snapshot-file ^File [src]
-  (io/file (cache-dir) (str "grist-" (sha256 (pr-str (dissoc src :api-key))) ".grist")))
+(defn- snapshot-file
+  "One snapshot per document, mode *and API key*: two Metabase databases on the same document with different keys (so
+  possibly different Grist rights) must never share a snapshot."
+  ^File [src]
+  (io/file (cache-dir) (str "grist-" (sha256 (pr-str src)) ".grist")))
 
 (defn- sqlite-file? [^File f]
   (and (.isFile f)
@@ -98,20 +103,112 @@
              (.followRedirects HttpClient$Redirect/NORMAL)
              (.build))))
 
-(defn- download! [{:keys [url doc-id api-key]} ^File dest]
-  (let [uri     (URI. (str url "/api/docs/" (URLEncoder/encode ^String doc-id "UTF-8")
-                           "/download?nohistory=true&template=false"))
-        request (cond-> (-> (HttpRequest/newBuilder uri)
-                            (.timeout (Duration/ofMinutes 5))
-                            (.GET))
-                  api-key (.header "Authorization" (str "Bearer " api-key)))
-        ^HttpResponse response (.send ^HttpClient @http-client (.build request)
+(defn- grist-request ^HttpRequest [{:keys [url doc-id api-key]} ^String path]
+  (.build (cond-> (-> (HttpRequest/newBuilder (URI. (str url "/api/docs/" (URLEncoder/encode ^String doc-id "UTF-8")
+                                                         path)))
+                      (.timeout (Duration/ofMinutes 5))
+                      (.GET))
+            api-key (.header "Authorization" (str "Bearer " api-key)))))
+
+(defn- grist-error [status doc-id body]
+  (ex-info (format "Grist a répondu %d pour le document %s : %s" status doc-id
+                   (subs (str body) 0 (min 300 (count (str body)))))
+           {:status-code 400, :grist-status status}))
+
+(defn- download! [{:keys [doc-id] :as src} ^File dest]
+  (let [^HttpResponse response (.send ^HttpClient @http-client
+                                      (grist-request src "/download?nohistory=true&template=false")
                                       (HttpResponse$BodyHandlers/ofFile (.toPath dest)))]
     (when-not (= 200 (.statusCode response))
-      (let [body (try (subs (slurp dest) 0 (min 300 (.length dest))) (catch Exception _ ""))]
+      (let [body (try (slurp dest) (catch Exception _ ""))]
         (.delete dest)
-        (throw (ex-info (format "Grist a répondu %d pour le document %s : %s" (.statusCode response) doc-id body)
-                        {:status-code 400}))))))
+        (throw (grist-error (.statusCode response) doc-id body))))))
+
+;;; Snapshot rebuilt from the records API: Grist applies the access rules of the API key's user to tables, columns and
+;;; rows, so the snapshot holds exactly what that user sees in Grist (and nothing of Grist's metadata or history).
+
+(defn- api-json
+  "GET `path` of the document as decoded JSON (string keys), or nil when Grist's access rules hide it (403)."
+  [{:keys [doc-id] :as src} path]
+  (let [^HttpResponse response (.send ^HttpClient @http-client (grist-request src path)
+                                      (HttpResponse$BodyHandlers/ofString StandardCharsets/UTF_8))
+        status (.statusCode response)]
+    (cond
+      (= 200 status) (json/decode (.body response))
+      (and (= 403 status) (not= path "/tables")) nil
+      :else (throw (grist-error status doc-id (.body response))))))
+
+(defn- sql-type [^String grist-type]
+  (case (first (str/split grist-type #":" 2))
+    "Date"            "DATE"
+    "DateTime"        "TIMESTAMP"
+    ("Int" "Ref" "Id") "INTEGER"
+    "Numeric"         "NUMERIC"
+    "Bool"            "BOOLEAN"
+    "Any"             "BLOB"
+    "TEXT"))
+
+(defn- cell-value
+  "A records API value as stored in a .grist file: lists (`[\"L\", ...]`) as JSON, booleans as 0/1, and errors or
+  censored cells (`[\"E\", ...]`, `[\"C\"]`) as NULL."
+  [v]
+  (cond
+    (boolean? v)    (if v 1 0)
+    (sequential? v) (when (= "L" (first v)) (json/encode (vec (rest v))))
+    (map? v)        (json/encode v)
+    :else           v))
+
+(defn- quote-id ^String [^String id]
+  (str "\"" (str/replace id "\"" "\"\"") "\""))
+
+(defn- build-from-records! [src ^File dest]
+  (let [tables (get (api-json src "/tables") "tables")]
+    (with-open [conn (DriverManager/getConnection (str "jdbc:sqlite:" (.getAbsolutePath dest)))]
+      (.setAutoCommit conn false)
+      (with-open [stmt (.createStatement conn)]
+        (.executeUpdate stmt "CREATE TABLE _grist_Tables (id INTEGER PRIMARY KEY, tableId TEXT)")
+        (.executeUpdate stmt (str "CREATE TABLE _grist_Tables_column (id INTEGER PRIMARY KEY, parentId INTEGER,"
+                                  " parentPos NUMERIC, colId TEXT, type TEXT, label TEXT, isFormula INTEGER,"
+                                  " formula TEXT, description TEXT)")))
+      (doseq [[table-pos table] (map-indexed vector tables)
+              :let [table-id ^String (get table "id")
+                    path     (str "/tables/" (URLEncoder/encode table-id "UTF-8"))
+                    columns  (some-> (api-json src (str path "/columns")) (get "columns"))
+                    records  (when columns (some-> (api-json src (str path "/records")) (get "records")))]
+              ;; a table the user cannot read is left out entirely
+              :when (some? records)
+              :let [seen    (into #{} (mapcat #(keys (get % "fields"))) records)
+                    ;; only columns the records actually carry: a column hidden by an access rule never appears
+                    columns (cond->> columns (seq records) (filter #(contains? seen (get % "id"))))
+                    col-ids (mapv #(get % "id") columns)]]
+        (with-open [stmt (.createStatement conn)]
+          (.executeUpdate stmt (str "CREATE TABLE " (quote-id table-id) " (id INTEGER PRIMARY KEY"
+                                    (apply str (for [c columns]
+                                                 (str ", " (quote-id (get c "id")) " "
+                                                      (sql-type (get-in c ["fields" "type"])))))
+                                    ")")))
+        (with-open [^PreparedStatement ps (.prepareStatement conn "INSERT INTO _grist_Tables VALUES (?, ?)")]
+          (.setObject ps 1 (inc table-pos))
+          (.setObject ps 2 table-id)
+          (.executeUpdate ps))
+        (with-open [^PreparedStatement ps (.prepareStatement
+                                           conn "INSERT INTO _grist_Tables_column VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)")]
+          (doseq [[i c] (map-indexed vector columns)
+                  :let [f (get c "fields")]]
+            (doseq [[j v] (map-indexed vector [(inc table-pos) i (get c "id") (get f "type") (get f "label")
+                                               (if (get f "isFormula") 1 0) (get f "formula") (get f "description")])]
+              (.setObject ps (inc j) v))
+            (.executeUpdate ps)))
+        (with-open [^PreparedStatement ps (.prepareStatement
+                                           conn (str "INSERT INTO " (quote-id table-id) " VALUES (?"
+                                                     (apply str (repeat (count col-ids) ", ?")) ")"))]
+          (doseq [r records]
+            (.setObject ps 1 (get r "id"))
+            (doseq [[j col-id] (map-indexed vector col-ids)]
+              (.setObject ps (+ 2 j) (cell-value (get-in r ["fields" col-id]))))
+            (.addBatch ps))
+          (.executeBatch ps)))
+      (.commit conn))))
 
 (defn- backup-file!
   "Copy the mounted `.grist` file with SQLite's online backup, which holds the source's read lock only briefly and
@@ -130,8 +227,9 @@
   (let [tmp (File/createTempFile "grist-" ".part" (cache-dir))]
     (try
       (case (:kind src)
-        :api  (download! src tmp)
-        :file (backup-file! src tmp))
+        :api     (download! src tmp)
+        :records (do (.delete tmp) (build-from-records! src tmp))
+        :file    (backup-file! src tmp))
       (when-not (sqlite-file? tmp)
         (throw (ex-info "La réponse de Grist n'est pas un document SQLite." {:status-code 400})))
       ;; atomic: queries running on the previous snapshot keep reading it until they close their connection
@@ -157,9 +255,18 @@
             (swap! refreshed-at assoc k (System/currentTimeMillis))
             (log/infof "Grist snapshot refreshed: %s -> %s" (or (:doc-id src) (:path src)) k)
             (catch Throwable e
-              (if (.exists target)
+              (cond
+                ;; access revoked or key invalid: fail closed, never keep serving data the key may no longer see
+                (#{401 403 404} (:grist-status (ex-data e)))
+                (do (.delete target)
+                    (swap! refreshed-at dissoc k)
+                    (throw e))
+
+                ;; Grist unreachable or failing: keep serving the previous snapshot
+                (.exists target)
                 (log/warnf e "Grist snapshot refresh failed, serving the previous one: %s" k)
-                (throw e)))))))
+
+                :else (throw e)))))))
     k))
 
 ;;; ------------------------------------------------ Connections -------------------------------------------------
@@ -185,7 +292,7 @@
   ((get-method sql-jdbc.conn/connection-details->spec :sqlite)
    :sqlite
    (-> details
-       (dissoc :grist-url :doc-id :api-key :doc-path :refresh-seconds)
+       (dissoc :grist-url :doc-id :api-key :doc-path :refresh-seconds :respect-access-rules)
        (assoc :db (ensure-snapshot! details) :read-only? true))))
 
 (defmethod driver/can-connect? :grist

@@ -21,7 +21,14 @@ driver:
       - name: api-key
         display-name: Clé API Grist
         type: password
-        helper-text: Clé d'un compte de service ayant accès en lecture au document entier.
+        helper-text: Clé d'un compte de service en lecture (ou d'un utilisateur, avec les règles d'accès ci-dessous).
+      - name: respect-access-rules
+        display-name: Appliquer les règles d'accès Grist de ce compte
+        type: boolean
+        default: false
+        helper-text: >-
+          L'instantané ne contient que les tables, colonnes et lignes que le compte de la clé API voit dans Grist
+          (reconstruit à partir de l'API des enregistrements, plus lent). Sinon, le document entier est téléchargé.
       - name: doc-path
         display-name: Chemin du fichier .grist (au lieu de l'API)
         placeholder: /grist/docs/dvy4ya4xdf19W3gVT57ttr.grist

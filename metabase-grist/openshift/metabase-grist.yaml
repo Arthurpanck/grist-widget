@@ -130,6 +130,10 @@ spec:
                 - {name: GRIST_URL, value: "http://grist:8484"}
                 - {name: METABASE_URL, value: "http://metabase:3000"}
                 - {name: REFRESH_SECONDS, value: "300"}
+                # Per-audience variant (one CronJob per audience, each with its own service account key):
+                # - {name: RESPECT_ACCESS_RULES, value: "true"}   # snapshot = what this account sees in Grist
+                # - {name: AUDIENCE, value: "Bretagne"}           # database names "<doc> — Bretagne"
+                # - {name: METABASE_GROUP, value: "Agents Bretagne"}
                 - name: GRIST_API_KEY
                   valueFrom: {secretKeyRef: {name: metabase-grist, key: grist-api-key}}
                 - name: METABASE_API_KEY

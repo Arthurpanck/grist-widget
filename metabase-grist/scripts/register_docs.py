@@ -3,6 +3,8 @@
 
 Idempotent: run it from a CronJob to pick up new documents. For each document it
   * creates the Metabase database if none has this doc-id yet (or updates its name),
+  * closes the new database to every group but Administrators and METABASE_GROUP (Metabase opens a new database to
+    "All Users", native SQL included),
   * once synced, sets Metabase display names from the Grist column labels.
 
 Environment:
@@ -15,6 +17,10 @@ Environment:
   METABASE_USER / METABASE_PASSWORD
   REFRESH_SECONDS    snapshot freshness passed to the driver (default 300)
   GRIST_WORKSPACES   optional comma-separated workspace names to limit the scan
+  RESPECT_ACCESS_RULES  "true": snapshots hold only what the key's account sees in Grist (records API)
+  METABASE_GROUP     optional Metabase group given query-builder access to the new databases (no native SQL)
+  AUDIENCE           optional audience name ("Bretagne"), appended to database names: run the script once per
+                     audience (one service account, one Metabase group each) to give each its own databases
 """
 import json
 import os
@@ -30,6 +36,10 @@ GRIST_URL_FOR_METABASE = os.environ.get("GRIST_URL_FOR_METABASE", GRIST_URL).rst
 MB_URL = os.environ["METABASE_URL"].rstrip("/")
 REFRESH = int(os.environ.get("REFRESH_SECONDS", "300"))
 ONLY_WS = {w.strip() for w in os.environ.get("GRIST_WORKSPACES", "").split(",") if w.strip()}
+RESPECT_RULES = os.environ.get("RESPECT_ACCESS_RULES", "").lower() in ("1", "true", "yes")
+MB_GROUP = os.environ.get("METABASE_GROUP", "").strip()
+AUDIENCE = os.environ.get("AUDIENCE", "").strip()
+SUFFIX = f" — {AUDIENCE}" if AUDIENCE else ""
 
 
 def http(method, url, headers, body=None):
@@ -97,22 +107,44 @@ def apply_labels(db_id, doc_id):
                 mb("PUT", f"/api/field/{field['id']}", {"display_name": label})
 
 
+def close_database(db_id):
+    """No access to `db_id` for any group but Administrators, query-builder access for METABASE_GROUP."""
+    groups = mb("GET", "/api/permissions/group")
+    graph = mb("GET", "/api/permissions/graph")
+    target = None
+    for g in groups:
+        if g["name"] in ("Administrators", "Administrateurs"):
+            continue
+        graph["groups"].setdefault(str(g["id"]), {})[str(db_id)] = {
+            "view-data": "unrestricted", "create-queries": "no", "download": {"schemas": "none"}}
+        if g["name"] == MB_GROUP:
+            target = g["id"]
+    if MB_GROUP and target is None:
+        print(f"  Metabase group {MB_GROUP!r} not found: database left closed to everyone", file=sys.stderr)
+    if target is not None:
+        graph["groups"][str(target)][str(db_id)] = {
+            "view-data": "unrestricted", "create-queries": "query-builder", "download": {"schemas": "full"}}
+    mb("PUT", "/api/permissions/graph", graph)
+
+
 def main():
     existing = {}
     for db in mb("GET", "/api/database")["data"]:
-        if db["engine"] == "grist" and db.get("details", {}).get("doc-id"):
+        if (db["engine"] == "grist" and db.get("details", {}).get("doc-id")
+                and (db["name"].endswith(SUFFIX) if SUFFIX else " — " not in db["name"])):
             existing[db["details"]["doc-id"]] = db
 
     for org, ws, doc in grist_docs():
-        name = f"{ws['name']} / {doc['name']}"
+        name = f"{ws['name']} / {doc['name']}{SUFFIX}"
         db = existing.get(doc["id"])
         if db is None:
             print(f"+ {name} ({doc['id']})")
             db = mb("POST", "/api/database", {
                 "engine": "grist", "name": name,
-                "details": {"grist-url": GRIST_URL_FOR_METABASE, "doc-id": doc["id"],
-                            "api-key": GRIST_KEY, "refresh-seconds": REFRESH},
+                "details": {"grist-url": GRIST_URL_FOR_METABASE, "doc-id": doc["id"], "api-key": GRIST_KEY,
+                            "respect-access-rules": RESPECT_RULES, "refresh-seconds": REFRESH},
             })
+            close_database(db["id"])
         elif db["name"] != name:
             print(f"~ {db['name']} -> {name}")
             mb("PUT", f"/api/database/{db['id']}", {"name": name})
