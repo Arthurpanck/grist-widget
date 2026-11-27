@@ -166,3 +166,29 @@ aux règles d'accès fines, secrets, NetworkPolicy et droits Metabase.
 **Alternative sans code Metabase :** répliquer périodiquement les tables Grist vers PostgreSQL (script, n8n…) et
 brancher Metabase sur PostgreSQL. C'est plus robuste pour de gros volumes, mais c'est un pipeline de plus à
 exploiter et la fraîcheur est moindre.
+
+## 7. Relecture : défauts connus avant une mise en production
+
+Relecture complète du pilote et des scripts, chaque point vérifié par un test. **État : prototype validé, pas encore
+prêt pour la production.**
+
+| Défaut constaté | Gravité | Correction |
+|---|---|---|
+| **Le mode fichier contourne `MB_READABLE_PATHS`.** Le pilote SQLite natif refuse `/plugins/sample-database.sqlite` (hors liste) ; le pilote grist l'accepte et le lit en SQL natif. Un admin peut donc ouvrir n'importe quel fichier SQLite du pod. | Sécurité | Appliquer le contrôle de chemin de Metabase au fichier source, ou retirer le mode fichier (le mode API suffit sur OpenShift) |
+| **Les copies ne sont jamais supprimées.** 15 fichiers sur disque pour 6 bases déclarées après les tests : base supprimée ou clé changée, la copie reste, avec ses données. Le cache `emptyDir` finit par se remplir. | Exploitation et rétention | Purger les copies non rafraîchies depuis longtemps |
+| **`register_docs.py` crée un doublon à chaque passage** pour un document dont le nom contient ` — ` (testé : 2 bases après 2 passages). En CronJob, une base de plus toutes les 15 minutes. | Bug | Reconnaître les bases par identifiant de document et public, pas par leur nom |
+| **Les heures sont en UTC.** Une `DateTime` affichée 20:00 dans Grist (Europe/Paris) sort à 18:00 dans Metabase, même avec le fuseau de rapport réglé sur Paris. Les regroupements par jour sont décalés autour de minuit. Les colonnes `Date` sont justes. | Fonctionnel | Convertir selon le fuseau de la colonne Grist |
+| Une base créée par le script reste ouverte à tous, SQL compris, **pendant quelques secondes** avant d'être fermée. | Sécurité, faible | Pas de réglage « fermé par défaut » en open source ; à accepter ou à compenser par une instance dédiée |
+| Le script ne retire jamais de Metabase un document supprimé ou départagé dans Grist (la base cesse de répondre mais reste listée). | Exploitation | Désactiver ou supprimer les bases orphelines |
+| Mode « règles Grist » : chaque table est chargée **en mémoire** (9 Mo de JSON pour 50 000 lignes). | Limite | Réserver ce mode aux documents de taille moyenne, ou paginer |
+| La copie est retéléchargée à chaque expiration même si le document n'a pas changé, et les requêtes du document attendent pendant ce temps. | Performance | Comparer d'abord la date de modification du document |
+| La clé API Grist circule en clair en HTTP entre les pods. | Sécurité | Passer par la route HTTPS de Grist ou un service mesh |
+
+Il manque aussi, pour une vraie mise en production : un essai sur un cluster OpenShift réel, un essai de charge avec
+plusieurs utilisateurs, une intégration continue qui rejoue `smoke_test.py` et `acl_test.py`, et une personne capable
+de maintenir du Clojure. Non testés : tables de synthèse Grist, pièces jointes, listes de références, noms de
+colonnes inhabituels.
+
+Côté interface, le pilote n'ajoute ni bouton ni logo : « Grist » apparaît dans la liste *Type de base de données* de
+l'écran d'administration, avec l'icône générique. Il n'y a pas de sélecteur de documents : on saisit l'identifiant, ou
+`register_docs.py` déclare les documents, qui apparaissent alors chacun comme une base dans *Bases de données*.
